@@ -1,6 +1,7 @@
-//! Example how to use pure `egui_glow` without [`epi`].
+mod error;
+use glow::{HasContext, PixelPackData};
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+use crate::error::{Error, Result};
 
 fn create_display(
     event_loop: &glutin::event_loop::EventLoop<()>,
@@ -14,7 +15,7 @@ fn create_display(
             width: 800.0,
             height: 600.0,
         })
-        .with_title("egui_glow example");
+        .with_title("twitchy mcbotface");
 
     let gl_window = unsafe {
         glutin::ContextBuilder::new()
@@ -38,7 +39,16 @@ fn create_display(
     (gl_window, gl)
 }
 
-fn main() {
+fn main() -> Result<()> {
+    // set up NDI SDK for sending
+    let ndi = match ndi_sdk::load() {
+        Ok(ndi) => ndi,
+        Err(s) => return Err(Error::NDISDKError(s)),
+    };
+
+    let mut sender = ndi.create_send_instance("chatbox".to_string(), false, false)?;
+
+    // egui/glow stuff
     let mut clear_color = [0.1, 0.1, 0.1];
 
     let event_loop = glutin::event_loop::EventLoop::with_user_event();
@@ -46,7 +56,7 @@ fn main() {
 
     let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), &gl);
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, _, control_flow: &mut glutin::event_loop::ControlFlow | {
         let mut redraw = || {
             let mut quit = false;
 
@@ -80,10 +90,51 @@ fn main() {
 
                 egui_glow.paint(gl_window.window(), &gl);
 
+                let window_size = gl_window.window().inner_size();
+                let (width, height) = (window_size.width as i32, window_size.height as i32);
+                let capacity: usize = match TryInto::<usize>::try_into(width * height) {
+                    Ok(capacity) => capacity * 4,
+                    Err(_) => {
+                        println!("meow");
+                        *control_flow = glutin::event_loop::ControlFlow::Exit;
+                        return ();
+                    }
+                };
+
+                let mut bytes: Vec<u8> = Vec::with_capacity(capacity);
+                let pixels = PixelPackData::Slice(&mut bytes);
+
+                unsafe {
+                    gl.read_pixels(0, 0, width, height, 0x1908, 0x1401, pixels);
+                }
+
+                let frame_builder = ndi_sdk::send::create_ndi_send_video_frame(
+                    width,
+                    height,
+                    ndi_sdk::send::FrameFormatType::Progressive,
+                )
+                .with_data(
+                    bytes,
+                    width * 4,
+                    ndi_sdk::send::SendColorFormat::Rgba,
+                );
+
+                let frame = match frame_builder.build() {
+                    Ok(f) => f,
+                    Err(_) => {
+                        println!("whoops");
+                        *control_flow = glutin::event_loop::ControlFlow::Exit;
+                        return ();
+                    }
+                };
+
+                sender.send_video(frame);
+
                 // draw things on top of egui here
 
                 gl_window.swap_buffers().unwrap();
             }
+            ()
         };
 
         match event {
@@ -106,9 +157,11 @@ fn main() {
                 egui_glow.on_event(&event);
 
                 gl_window.window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
+                ()
             }
             glutin::event::Event::LoopDestroyed => {
                 egui_glow.destroy(&gl);
+                ()
             }
 
             _ => (),

@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 
+thiserror = "~1.0"
+anyhow = "~1.0"
+
 glow = "0.11"
 glutin = "0.28.0"
 egui_glow = "0.17.0"
@@ -14,3 +17,5 @@ egui = { version = "0.17.0", default-features = false, features = [
   "convert_bytemuck",
   "single_threaded",
 ] }
+
+ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
