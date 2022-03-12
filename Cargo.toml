@@ -1,0 +1,16 @@
+[package]
+name = "twitchy-mcbotface"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+glow = "0.11"
+glutin = "0.28.0"
+egui_glow = "0.17.0"
+egui = { version = "0.17.0", default-features = false, features = [
+  "convert_bytemuck",
+  "single_threaded",
+] }
