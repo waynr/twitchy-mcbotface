@@ -95,16 +95,24 @@ fn main() -> Result<()> {
                 let capacity: usize = match TryInto::<usize>::try_into(width * height) {
                     Ok(capacity) => capacity * 4,
                     Err(_) => {
-                        println!("meow");
                         *control_flow = glutin::event_loop::ControlFlow::Exit;
                         return ();
                     }
                 };
 
-                let mut bytes: Vec<u8> = Vec::with_capacity(capacity);
-                let pixels = PixelPackData::Slice(&mut bytes);
+                let mut buf: Vec<u8> = Vec::with_capacity(capacity);
+                for i in 0..capacity {
+                    // vec must actually be populated before it can be written to by the opengl
+                    // bindings. use a semitransparent grey image to help debugging in case
+                    // something else goes wrong when grabbing the image from the gpu
+                    buf.push(244)
+                }
 
+                let mut pixels = PixelPackData::Slice(&mut buf);
                 unsafe {
+                    // from https://docs.gl/gl4/glReadPixels,
+                    // format = 0x1908 should match to GL_RGBA
+                    // gltype = 0x1401 should match to GL_UNSIGNED_BYTE
                     gl.read_pixels(0, 0, width, height, 0x1908, 0x1401, pixels);
                 }
 
@@ -114,7 +122,7 @@ fn main() -> Result<()> {
                     ndi_sdk::send::FrameFormatType::Progressive,
                 )
                 .with_data(
-                    bytes,
+                    buf,
                     width * 4,
                     ndi_sdk::send::SendColorFormat::Rgba,
                 );
@@ -122,7 +130,6 @@ fn main() -> Result<()> {
                 let frame = match frame_builder.build() {
                     Ok(f) => f,
                     Err(_) => {
-                        println!("whoops");
                         *control_flow = glutin::event_loop::ControlFlow::Exit;
                         return ();
                     }
