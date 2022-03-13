@@ -11,4 +11,6 @@ pub enum Error {
     NDISDKSenderCreatError(#[from] SendCreateError),
     #[error("invalid SDI byte capacity")]
     InvalidSDIByteBufferCapacity,
+    #[error("type conversion failed")]
+    TypeConversionError(#[from] std::num::TryFromIntError),
 }

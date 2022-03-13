@@ -1,7 +1,5 @@
-mod error;
-use glow::{HasContext, PixelPackData};
-
-use crate::error::{Error, Result};
+use tmbf::ndi::{NDIFrameData, NDIPainter};
+use tmbf::error::Result;
 
 fn create_display(
     event_loop: &glutin::event_loop::EventLoop<()>,
@@ -40,13 +38,7 @@ fn create_display(
 }
 
 fn main() -> Result<()> {
-    // set up NDI SDK for sending
-    let ndi = match ndi_sdk::load() {
-        Ok(ndi) => ndi,
-        Err(s) => return Err(Error::NDISDKError(s)),
-    };
-
-    let mut sender = ndi.create_send_instance("chatbox".to_string(), false, false)?;
+    let mut ndi_painter = NDIPainter::new()?;
 
     // egui/glow stuff
     let mut clear_color = [0.1, 0.1, 0.1];
@@ -56,122 +48,99 @@ fn main() -> Result<()> {
 
     let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), &gl);
 
-    event_loop.run(move |event, _, control_flow: &mut glutin::event_loop::ControlFlow | {
-        let mut redraw = || {
-            let mut quit = false;
+    event_loop.run(
+        move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
+            let mut redraw = || {
+                let mut quit = false;
 
-            let needs_repaint = egui_glow.run(gl_window.window(), |egui_ctx| {
-                egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
-                    ui.heading("Hello World!");
-                    if ui.button("Quit").clicked() {
-                        quit = true;
-                    }
-                    ui.color_edit_button_rgb(&mut clear_color);
+                let needs_repaint = egui_glow.run(gl_window.window(), |egui_ctx| {
+                    egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
+                        ui.heading("Hello World!");
+                        if ui.button("Quit").clicked() {
+                            quit = true;
+                        }
+                        ui.color_edit_button_rgb(&mut clear_color);
+                    });
                 });
-            });
 
-            *control_flow = if quit {
-                glutin::event_loop::ControlFlow::Exit
-            } else if needs_repaint {
-                gl_window.window().request_redraw();
-                glutin::event_loop::ControlFlow::Poll
-            } else {
-                glutin::event_loop::ControlFlow::Wait
+                *control_flow = if quit {
+                    glutin::event_loop::ControlFlow::Exit
+                } else if needs_repaint {
+                    gl_window.window().request_redraw();
+                    glutin::event_loop::ControlFlow::Poll
+                } else {
+                    glutin::event_loop::ControlFlow::Wait
+                };
+
+                {
+                    unsafe {
+                        use glow::HasContext as _;
+                        gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
+                        gl.clear(glow::COLOR_BUFFER_BIT);
+                    }
+
+                    // draw things behind egui here
+
+                    egui_glow.paint(gl_window.window(), &gl);
+                    
+                    // draw things on top of egui here
+
+                    // get window size
+                    let window_size = gl_window.window().inner_size();
+
+                    // prep NDI video frame
+                    let mut frame_data: NDIFrameData = match (window_size.width as i32, window_size.height as i32).try_into() {
+                        Ok(fd) => fd,
+                        Err(_) => {
+                            *control_flow = glutin::event_loop::ControlFlow::Exit;
+                            return ();
+                        },
+                    };
+                    frame_data.get_pixels(&gl);
+
+                    // send NDI video frame
+                    match ndi_painter.paint(frame_data) {
+                        Err(_) => {
+                            *control_flow = glutin::event_loop::ControlFlow::Exit;
+                            return ();
+                        },
+                        _ => (),
+                    };
+
+                    gl_window.swap_buffers().unwrap();
+                }
+                ()
             };
 
-            {
-                unsafe {
-                    use glow::HasContext as _;
-                    gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
-                    gl.clear(glow::COLOR_BUFFER_BIT);
-                }
+            match event {
+                // Platform-dependent event handlers to workaround a winit bug
+                // See: https://github.com/rust-windowing/winit/issues/987
+                // See: https://github.com/rust-windowing/winit/issues/1619
+                glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
+                glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
 
-                // draw things behind egui here
-
-                egui_glow.paint(gl_window.window(), &gl);
-
-                let window_size = gl_window.window().inner_size();
-                let (width, height) = (window_size.width as i32, window_size.height as i32);
-                let capacity: usize = match TryInto::<usize>::try_into(width * height) {
-                    Ok(capacity) => capacity * 4,
-                    Err(_) => {
+                glutin::event::Event::WindowEvent { event, .. } => {
+                    use glutin::event::WindowEvent;
+                    if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) {
                         *control_flow = glutin::event_loop::ControlFlow::Exit;
-                        return ();
                     }
-                };
 
-                let mut buf: Vec<u8> = Vec::with_capacity(capacity);
-                for i in 0..capacity {
-                    // vec must actually be populated before it can be written to by the opengl
-                    // bindings. use a semitransparent grey image to help debugging in case
-                    // something else goes wrong when grabbing the image from the gpu
-                    buf.push(244)
-                }
-
-                let mut pixels = PixelPackData::Slice(&mut buf);
-                unsafe {
-                    // from https://docs.gl/gl4/glReadPixels,
-                    // format = 0x1908 should match to GL_RGBA
-                    // gltype = 0x1401 should match to GL_UNSIGNED_BYTE
-                    gl.read_pixels(0, 0, width, height, 0x1908, 0x1401, pixels);
-                }
-
-                let frame_builder = ndi_sdk::send::create_ndi_send_video_frame(
-                    width,
-                    height,
-                    ndi_sdk::send::FrameFormatType::Progressive,
-                )
-                .with_data(
-                    buf,
-                    width * 4,
-                    ndi_sdk::send::SendColorFormat::Rgba,
-                );
-
-                let frame = match frame_builder.build() {
-                    Ok(f) => f,
-                    Err(_) => {
-                        *control_flow = glutin::event_loop::ControlFlow::Exit;
-                        return ();
+                    if let glutin::event::WindowEvent::Resized(physical_size) = event {
+                        gl_window.resize(physical_size);
                     }
-                };
 
-                sender.send_video(frame);
+                    egui_glow.on_event(&event);
 
-                // draw things on top of egui here
-
-                gl_window.swap_buffers().unwrap();
-            }
-            ()
-        };
-
-        match event {
-            // Platform-dependent event handlers to workaround a winit bug
-            // See: https://github.com/rust-windowing/winit/issues/987
-            // See: https://github.com/rust-windowing/winit/issues/1619
-            glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
-            glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
-
-            glutin::event::Event::WindowEvent { event, .. } => {
-                use glutin::event::WindowEvent;
-                if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) {
-                    *control_flow = glutin::event_loop::ControlFlow::Exit;
+                    gl_window.window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
+                    ()
+                }
+                glutin::event::Event::LoopDestroyed => {
+                    egui_glow.destroy(&gl);
+                    ()
                 }
 
-                if let glutin::event::WindowEvent::Resized(physical_size) = event {
-                    gl_window.resize(physical_size);
-                }
-
-                egui_glow.on_event(&event);
-
-                gl_window.window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
-                ()
+                _ => (),
             }
-            glutin::event::Event::LoopDestroyed => {
-                egui_glow.destroy(&gl);
-                ()
-            }
-
-            _ => (),
-        }
-    });
+        },
+    );
 }
