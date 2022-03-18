@@ -133,7 +133,9 @@ impl IrcCore {
         client: TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>,
         mut receiver: broadcast::Receiver<ComponentMessage>,
     ) {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
         while let Ok(message) = receiver.recv().await {
+            interval.tick().await;
             match message {
                 ComponentMessage::JoinChannel(msg) => {
                     match client.join(msg.channel) {
@@ -157,19 +159,19 @@ impl IrcCore {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ComponentMessage {
     Chat(ChatMessage),
     JoinChannel(JoinChannelMessage),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChatMessage {
-    channel: String,
-    message: String,
+    pub channel: String,
+    pub message: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct JoinChannelMessage {
     pub channel: String,
 }

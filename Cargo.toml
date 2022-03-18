@@ -37,3 +37,5 @@ futures = "~0.3"
 # config serialization/deserialization
 serde = "1.0"
 serde_yaml = "0.8"
+
+unicode-segmentation = "~1.9"
