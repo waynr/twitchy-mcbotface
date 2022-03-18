@@ -1,5 +1,14 @@
-use tmbf::ndi::{NDIFrameData, NDIPainter};
+use std::fs::File;
+use std::io::Read;
+
+use futures::future::join;
+
+use twitch_irc::login::StaticLoginCredentials;
+use twitch_irc::ClientConfig;
+
 use tmbf::error::Result;
+use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
+use tmbf::ndi::{NDIFrameData, NDIPainter};
 
 fn create_display(
     event_loop: &glutin::event_loop::EventLoop<()>,
@@ -37,7 +46,7 @@ fn create_display(
     (gl_window, gl)
 }
 
-fn main() -> Result<()> {
+fn glutin_event_loop() -> Result<()> {
     let mut ndi_painter = NDIPainter::new()?;
 
     // egui/glow stuff
@@ -82,20 +91,21 @@ fn main() -> Result<()> {
                     // draw things behind egui here
 
                     egui_glow.paint(gl_window.window(), &gl);
-                    
+
                     // draw things on top of egui here
 
                     // get window size
                     let window_size = gl_window.window().inner_size();
 
                     // prep NDI video frame
-                    let mut frame_data: NDIFrameData = match (window_size.width as i32, window_size.height as i32).try_into() {
-                        Ok(fd) => fd,
-                        Err(_) => {
-                            *control_flow = glutin::event_loop::ControlFlow::Exit;
-                            return ();
-                        },
-                    };
+                    let mut frame_data: NDIFrameData =
+                        match (window_size.width as i32, window_size.height as i32).try_into() {
+                            Ok(fd) => fd,
+                            Err(_) => {
+                                *control_flow = glutin::event_loop::ControlFlow::Exit;
+                                return ();
+                            }
+                        };
                     frame_data.get_pixels(&gl);
 
                     // send NDI video frame
@@ -103,7 +113,7 @@ fn main() -> Result<()> {
                         Err(_) => {
                             *control_flow = glutin::event_loop::ControlFlow::Exit;
                             return ();
-                        },
+                        }
                         _ => (),
                     };
 
@@ -143,4 +153,47 @@ fn main() -> Result<()> {
             }
         },
     );
+}
+
+#[tokio::main]
+pub async fn main() -> Result<()> {
+    let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
+    let mut contents = String::new();
+
+    file.read_to_string(&mut contents)?;
+    let login_creds: StaticLoginCredentials = serde_yaml::from_str(&contents)?;
+
+    let config = ClientConfig::new_simple(login_creds);
+    let mut core = IrcCore::new();
+    let dispatcher = core.get_msg_dispatcher();
+    let run_irc_handle = core.run_irc(config);
+
+    let joiner_handler = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        match dispatcher
+            .sender
+            .send(ComponentMessage::JoinChannel(JoinChannelMessage {
+                channel: "uuayn".to_string(),
+            })) {
+            Err(e) => {
+                println!("failed to join uuayn channel: {}", e)
+            }
+            _ => (),
+        }
+    });
+
+    let (run_irc_result, joiner_result) = join(run_irc_handle, joiner_handler).await;
+    match joiner_result {
+        Err(e) => {
+            println!("joiner failed: {}", e)
+        },
+        _ => (),
+    };
+    match run_irc_result {
+        Err(e) => {
+            println!("run_irc failed: {}", e)
+        },
+        _ => (),
+    };
+    Ok(())
 }

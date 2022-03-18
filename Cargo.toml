@@ -25,3 +25,15 @@ egui = { version = "0.17.0", default-features = false, features = [
 ] }
 
 ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
+
+twitch-irc = { version = "~4.0", features = [ "with-serde" ] }
+
+tokio = { version = "~1.17", features = [
+  "rt-multi-thread",
+  "rt",
+] }
+futures = "~0.3"
+
+# config serialization/deserialization
+serde = "1.0"
+serde_yaml = "0.8"
