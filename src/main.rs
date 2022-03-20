@@ -168,11 +168,12 @@ pub async fn main() -> Result<()> {
     let mut core = IrcCore::new();
     let join_dispatcher = core.get_msg_dispatcher();
 
-    let cmdr_dispatcher = core.get_msg_dispatcher();
+    let run_irc_handle = core.run_irc(config);
+
+    let cmdr_dispatcher = join_dispatcher.clone();
     let mut cmdr = Commander::new("TODO".to_string(), cmdr_dispatcher);
     let cmdr_handle = cmdr.run_commander();
 
-    let run_irc_handle = core.run_irc(config);
 
     let joiner_handler = tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;

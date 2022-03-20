@@ -12,14 +12,17 @@ pub struct MessageDispatcher {
     // note: this should be an MPSC sender
     pub sender: broadcast::Sender<ComponentMessage>,
     pub receiver: broadcast::Receiver<ServerMessage>,
+
+    server_message_sender: broadcast::Sender<ServerMessage>,
 }
 
-impl MessageDispatcher {
-    fn new(
-        sender: broadcast::Sender<ComponentMessage>,
-        receiver: broadcast::Receiver<ServerMessage>,
-    ) -> Self {
-        Self { sender, receiver }
+impl Clone for MessageDispatcher {
+    fn clone(&self) -> Self {
+        MessageDispatcher {
+            sender: self.sender.clone(),
+            receiver: self.server_message_sender.subscribe(),
+            server_message_sender: self.server_message_sender.clone(),
+        }
     }
 }
 
@@ -37,7 +40,11 @@ impl IrcCore {
         let (dispatcher_sender, receiver) = broadcast::channel(200);
 
         Self {
-            dispatcher: MessageDispatcher::new(dispatcher_sender, dispatcher_receiver),
+            dispatcher: MessageDispatcher {
+                sender: dispatcher_sender,
+                receiver: dispatcher_receiver,
+                server_message_sender: sender.clone(),
+            },
             sender,
             _receiver: receiver,
         }
@@ -63,9 +70,15 @@ impl IrcCore {
         });
 
         // handle messages received from components
-        println!("num_dispatcher_receivers: {}", self.dispatcher.sender.receiver_count());
+        println!(
+            "num_dispatcher_receivers: {}",
+            self.dispatcher.sender.receiver_count()
+        );
         let component_message_receiver = self.dispatcher.sender.subscribe();
-        println!("num_dispatcher_receivers: {}", self.dispatcher.sender.receiver_count());
+        println!(
+            "num_dispatcher_receivers: {}",
+            self.dispatcher.sender.receiver_count()
+        );
         let component_message_handler_client = client.clone();
         let component_message_handler = tokio::spawn(async move {
             Self::component_message_handler(
@@ -82,11 +95,8 @@ impl IrcCore {
         Ok(())
     }
 
-    pub fn get_msg_dispatcher(&mut self) -> MessageDispatcher {
-        MessageDispatcher {
-            sender: self.dispatcher.sender.clone(),
-            receiver: self.sender.subscribe(),
-        }
+    pub fn get_msg_dispatcher(&self) -> MessageDispatcher {
+        self.dispatcher.clone()
     }
 
     pub async fn server_message_handler(
@@ -104,7 +114,7 @@ impl IrcCore {
                     match sender.send(ServerMessage::Privmsg(msg)) {
                         Err(e) => {
                             println!("failed to broadcast message: {}", e)
-                        },
+                        }
                         _ => (),
                     }
                 }
@@ -116,13 +126,13 @@ impl IrcCore {
                             "hello i am tw1tchymcbotface, humble servant of all stream viewers"
                                 .to_string(),
                         )
-                        .await {
-
-                            Err(e) => {
-                                println!("failed to send bot intro message to channel: {}", e)
-                            },
-                            _ => (),
+                        .await
+                    {
+                        Err(e) => {
+                            println!("failed to send bot intro message to channel: {}", e)
                         }
+                        _ => (),
+                    }
                 }
                 _ => (),
             }
@@ -137,14 +147,12 @@ impl IrcCore {
         while let Ok(message) = receiver.recv().await {
             interval.tick().await;
             match message {
-                ComponentMessage::JoinChannel(msg) => {
-                    match client.join(msg.channel) {
-                        Err(e) => {
-                            println!("failed to join requested channel: {}", e);
-                        },
-                        _ => (),
+                ComponentMessage::JoinChannel(msg) => match client.join(msg.channel) {
+                    Err(e) => {
+                        println!("failed to join requested channel: {}", e);
                     }
-                }
+                    _ => (),
+                },
                 ComponentMessage::Chat(msg) => {
                     match client.say(msg.channel.clone(), msg.message.clone()).await {
                         Err(e) => println!(
