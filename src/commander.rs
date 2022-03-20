@@ -32,7 +32,7 @@ impl Commander {
                             ),
                             "meow" => self.send_msg(&msg.channel_login, "woof"),
                             "woof" => self.send_msg(&msg.channel_login, "meow"),
-                            "so" => words
+                            "so" | "shoutout" => words
                                     .filter(|&word| word != " ")
                                     .for_each(|word| {
                                         self.send_msg(&msg.channel_login, &format!("https://twitch.tv/{}", word));
