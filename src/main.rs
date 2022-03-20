@@ -6,10 +6,10 @@ use futures::future::join3;
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
+use tmbf::commander::{CommanderComposer, HardCodedCommander};
 use tmbf::error::Result;
 use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
 use tmbf::ndi::{NDIFrameData, NDIPainter};
-use tmbf::commander::Commander;
 
 fn create_display(
     event_loop: &glutin::event_loop::EventLoop<()>,
@@ -171,9 +171,9 @@ pub async fn main() -> Result<()> {
     let run_irc_handle = core.run_irc(config);
 
     let cmdr_dispatcher = join_dispatcher.clone();
-    let mut cmdr = Commander::new("TODO".to_string(), cmdr_dispatcher);
-    let cmdr_handle = cmdr.run_commander();
-
+    let hard_coded_cmdr = Box::new(HardCodedCommander::new("TODO".to_string()));
+    let mut cmdr_composer = CommanderComposer::new(cmdr_dispatcher, vec![hard_coded_cmdr]);
+    let cmdr_handle = cmdr_composer.run_commanders();
 
     let joiner_handler = tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -189,17 +189,18 @@ pub async fn main() -> Result<()> {
         }
     });
 
-    let (_, run_irc_result, joiner_result) = join3(cmdr_handle, run_irc_handle, joiner_handler).await;
+    let (_, run_irc_result, joiner_result) =
+        join3(cmdr_handle, run_irc_handle, joiner_handler).await;
     match joiner_result {
         Err(e) => {
             println!("joiner failed: {}", e)
-        },
+        }
         _ => (),
     };
     match run_irc_result {
         Err(e) => {
             println!("run_irc failed: {}", e)
-        },
+        }
         _ => (),
     };
     Ok(())
