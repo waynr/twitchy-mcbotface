@@ -23,4 +23,9 @@ pub enum Error {
     TokioJoinError(#[from] tokio::task::JoinError),
     #[error("failed to send twitch irc message")]
     TwitchIRCMessageSendError(#[from] twitch_irc::Error<twitch_irc::SecureTCPTransport, twitch_irc::login::StaticLoginCredentials>),
+    #[error("something bad: {0}")]
+    SomethingBad(String),
+
+    #[error("failed to receive message")]
+    AsyncMessageReceiveError(#[from] tokio::sync::oneshot::error::RecvError),
 }

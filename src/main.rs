@@ -1,14 +1,16 @@
 use std::fs::File;
 use std::io::Read;
+use std::thread;
 
 use futures::future::join3;
+use tokio::sync::oneshot;
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
-use tmbf::error::Result;
-use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
+use tmbf::error::{Error, Result};
+use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
 use tmbf::ndi::{NDIFrameData, NDIPainter};
 
 fn create_display(
@@ -47,7 +49,20 @@ fn create_display(
     (gl_window, gl)
 }
 
-fn glutin_event_loop() -> Result<()> {
+fn main() -> Result<()> {
+    let (sender, receiver) = oneshot::channel::<MessageDispatcher>();
+    thread::spawn(move || {
+        if let Err(error) = all_the_async_things(sender) {
+            println!("all (or some) of the async things failed: {}", error);
+        }
+    });
+
+    glutin_event_loop(receiver)
+}
+
+fn glutin_event_loop(receiver: oneshot::Receiver<MessageDispatcher>) -> Result<()> {
+    let message_dispatcher = receiver.blocking_recv()?;
+
     let mut ndi_painter = NDIPainter::new()?;
 
     // egui/glow stuff
@@ -157,7 +172,7 @@ fn glutin_event_loop() -> Result<()> {
 }
 
 #[tokio::main]
-pub async fn main() -> Result<()> {
+pub async fn all_the_async_things(sender: oneshot::Sender<MessageDispatcher>) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
     let mut contents = String::new();
 
@@ -167,6 +182,12 @@ pub async fn main() -> Result<()> {
     let config = ClientConfig::new_simple(login_creds);
     let mut core = IrcCore::new();
     let join_dispatcher = core.get_msg_dispatcher();
+
+    if let Err(_error) = sender.send(join_dispatcher.clone()) {
+        return Err(Error::SomethingBad(
+            String::from("Receiver<MessageDispatcher> dropped"),
+        ));
+    }
 
     let run_irc_handle = core.run_irc(config);
 
