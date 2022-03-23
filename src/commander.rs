@@ -72,13 +72,12 @@ impl CommanderComposer {
                     if let Some(command) = words.next() {
                         match command {
                             "help" => {
-                                let mut commands = self
+                                let mut commands: Vec<String> = self
                                     .commanders
                                     .iter()
                                     .map(|commander| commander.get_commands())
                                     .flatten()
-                                    .map(|s| s.to_owned())
-                                    .collect::<Vec<String>>();
+                                    .collect();
                                 commands.sort();
                                 self.send_msg(&msg.channel_login, &commands.join(", "));
                             }
