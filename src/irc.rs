@@ -120,19 +120,19 @@ impl IrcCore {
                 }
                 ServerMessage::Join(msg) => {
                     println!("[{}] JOIN", msg.channel_login);
-                    match client
-                        .say(
-                            msg.channel_login.clone(),
-                            "hello i am tw1tchymcbotface, humble servant of all stream viewers"
-                                .to_string(),
-                        )
-                        .await
-                    {
-                        Err(e) => {
-                            println!("failed to send bot intro message to channel: {}", e)
-                        }
-                        _ => (),
-                    }
+                    // match client
+                    //     .say(
+                    //         msg.channel_login.clone(),
+                    //         "hello i am tw1tchymcbotface, humble servant of all stream viewers"
+                    //             .to_string(),
+                    //     )
+                    //     .await
+                    // {
+                    //     Err(e) => {
+                    //         println!("failed to send bot intro message to channel: {}", e)
+                    //     }
+                    //     _ => (),
+                    // }
                 }
                 _ => (),
             }
