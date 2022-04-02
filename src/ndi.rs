@@ -1,6 +1,7 @@
 use glow::{HasContext, PixelPackData};
 use ndi_sdk::send::{create_ndi_send_video_frame, FrameFormatType, SendColorFormat};
 use ndi_sdk::{load, SendInstance};
+use tokio::sync::mpsc;
 
 use crate::error::{Error, Result};
 
@@ -28,6 +29,15 @@ impl NDIPainter {
 
         self.sender.send_video(frame);
         Ok(())
+    }
+
+    pub async fn run(&mut self, mut receiver: mpsc::UnboundedReceiver<NDIFrameData>) {
+        while let Some(frame_data) = receiver.recv().await {
+            match self.paint(frame_data) {
+                Err(e) => println!("{}", e),
+                _ => (),
+            }
+        }
     }
 }
 

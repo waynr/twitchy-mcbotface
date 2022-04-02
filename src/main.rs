@@ -2,32 +2,40 @@ use std::fs::File;
 use std::io::Read;
 use std::thread;
 
-use futures::future::join3;
-use tokio::sync::oneshot;
+use futures::future::join4;
+use tokio::sync::{mpsc, oneshot};
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
+use tmbf::egui_ui::glutin_event_loop;
 use tmbf::error::{Error, Result};
 use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
-use tmbf::egui_ui::glutin_event_loop;
+use tmbf::ndi::{NDIFrameData, NDIPainter};
 
 fn main() -> Result<()> {
-    let (sender, receiver) = oneshot::channel::<MessageDispatcher>();
+    let (md_sender, md_receiver) = oneshot::channel::<MessageDispatcher>();
+    let (frame_sender, frame_receiver) = mpsc::unbounded_channel::<NDIFrameData>();
     thread::spawn(move || {
-        if let Err(error) = all_the_async_things(sender) {
+        if let Err(error) = all_the_async_things(md_sender, frame_receiver) {
             println!("all (or some) of the async things failed: {}", error);
         }
     });
 
-    glutin_event_loop(receiver)
+    glutin_event_loop(md_receiver, frame_sender)
 }
 
 #[tokio::main]
-pub async fn all_the_async_things(sender: oneshot::Sender<MessageDispatcher>) -> Result<()> {
+pub async fn all_the_async_things(
+    md_sender: oneshot::Sender<MessageDispatcher>,
+    frame_receiver: mpsc::UnboundedReceiver<NDIFrameData>,
+) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
     let mut contents = String::new();
+
+    let mut ndi_painter = NDIPainter::new()?;
+    let ndi_painter_handle = ndi_painter.run(frame_receiver);
 
     file.read_to_string(&mut contents)?;
     let login_creds: StaticLoginCredentials = serde_yaml::from_str(&contents)?;
@@ -36,7 +44,7 @@ pub async fn all_the_async_things(sender: oneshot::Sender<MessageDispatcher>) ->
     let mut core = IrcCore::new();
     let join_dispatcher = core.get_msg_dispatcher();
 
-    if let Err(_error) = sender.send(join_dispatcher.clone()) {
+    if let Err(_error) = md_sender.send(join_dispatcher.clone()) {
         return Err(Error::SomethingBad(String::from(
             "Receiver<MessageDispatcher> dropped",
         )));
@@ -63,8 +71,13 @@ pub async fn all_the_async_things(sender: oneshot::Sender<MessageDispatcher>) ->
         }
     });
 
-    let (_, run_irc_result, joiner_result) =
-        join3(cmdr_handle, run_irc_handle, joiner_handler).await;
+    let (_, run_irc_result, joiner_result, _) = join4(
+        cmdr_handle,
+        run_irc_handle,
+        joiner_handler,
+        ndi_painter_handle,
+    )
+    .await;
     match joiner_result {
         Err(e) => {
             println!("joiner failed: {}", e)

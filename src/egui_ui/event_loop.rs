@@ -1,8 +1,8 @@
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Result;
 use crate::irc::MessageDispatcher;
-use crate::ndi::{NDIFrameData, NDIPainter};
+use crate::ndi::NDIFrameData;
 
 fn create_display(
     event_loop: &glutin::event_loop::EventLoop<()>,
@@ -40,10 +40,11 @@ fn create_display(
     (gl_window, gl)
 }
 
-pub fn glutin_event_loop(receiver: oneshot::Receiver<MessageDispatcher>) -> Result<()> {
+pub fn glutin_event_loop(
+    receiver: oneshot::Receiver<MessageDispatcher>,
+    frame_sender: mpsc::UnboundedSender<NDIFrameData>,
+) -> Result<()> {
     let message_dispatcher = receiver.blocking_recv()?;
-
-    let mut ndi_painter = NDIPainter::new()?;
 
     // egui/glow stuff
     let mut clear_color = [0.1, 0.1, 0.1];
@@ -104,8 +105,8 @@ pub fn glutin_event_loop(receiver: oneshot::Receiver<MessageDispatcher>) -> Resu
                         };
                     frame_data.get_pixels(&gl);
 
-                    // send NDI video frame
-                    match ndi_painter.paint(frame_data) {
+                    // send NDI video frame to async NDIPainter
+                    match frame_sender.send(frame_data) {
                         Err(_) => {
                             *control_flow = glutin::event_loop::ControlFlow::Exit;
                             return ();
@@ -150,4 +151,3 @@ pub fn glutin_event_loop(receiver: oneshot::Receiver<MessageDispatcher>) -> Resu
         },
     );
 }
-
