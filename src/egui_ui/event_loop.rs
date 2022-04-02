@@ -81,7 +81,7 @@ pub fn glutin_event_loop(
                 {
                     unsafe {
                         use glow::HasContext as _;
-                        gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 0.6);
+                        gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
                         gl.clear(glow::COLOR_BUFFER_BIT);
                     }
 
