@@ -9,7 +9,7 @@ use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
-use tmbf::egui_ui::glutin_event_loop;
+use tmbf::egui_ui::Botface;
 use tmbf::error::{Error, Result};
 use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
 use tmbf::ndi::{NDIFrameData, NDIPainter};
@@ -17,13 +17,14 @@ use tmbf::ndi::{NDIFrameData, NDIPainter};
 fn main() -> Result<()> {
     let (md_sender, md_receiver) = oneshot::channel::<MessageDispatcher>();
     let (frame_sender, frame_receiver) = mpsc::unbounded_channel::<NDIFrameData>();
+    let botface = Botface::new(md_receiver, frame_sender)?;
     thread::spawn(move || {
         if let Err(error) = all_the_async_things(md_sender, frame_receiver) {
             println!("all (or some) of the async things failed: {}", error);
         }
     });
 
-    glutin_event_loop(md_receiver, frame_sender)
+    botface.run()
 }
 
 #[tokio::main]

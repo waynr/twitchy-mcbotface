@@ -1,4 +1,6 @@
-pub(crate) mod chatbox;
+mod chatbox;
+pub use chatbox::Chatbox;
 
 mod event_loop;
-pub use event_loop::glutin_event_loop;
+pub use event_loop::Botface;
+pub use event_loop::BotfaceEvent;

@@ -1,11 +1,45 @@
+use std::rc::Rc;
+
 use tokio::sync::{mpsc, oneshot};
 
+use crate::egui_ui::Chatbox;
 use crate::error::Result;
 use crate::irc::MessageDispatcher;
 use crate::ndi::NDIFrameData;
 
+pub enum BotfaceEvent {}
+
+pub struct Botface {
+    chatbox: Chatbox,
+    event_loop: glutin::event_loop::EventLoop<BotfaceEvent>,
+    frame_sender: mpsc::UnboundedSender<NDIFrameData>,
+}
+
+impl Botface {
+    pub fn new(
+        receiver: oneshot::Receiver<MessageDispatcher>,
+        frame_sender: mpsc::UnboundedSender<NDIFrameData>,
+    ) -> Result<Self> {
+        let chatbox = Chatbox::new(receiver.blocking_recv()?);
+        let event_loop = glutin::event_loop::EventLoop::<BotfaceEvent>::with_user_event();
+        Ok(Self {
+            chatbox,
+            event_loop,
+            frame_sender,
+        })
+    }
+
+    pub async fn run_async_things(&self) {
+        self.chatbox.run(self.event_loop.create_proxy()).await;
+    }
+
+    pub fn run_event_loop(self) -> Result<()> {
+        run_event_loop(self.event_loop, self.chatbox, self.frame_sender)
+    }
+}
+
 fn create_display(
-    event_loop: &glutin::event_loop::EventLoop<()>,
+    event_loop: &glutin::event_loop::EventLoop<BotfaceEvent>,
 ) -> (
     glutin::WindowedContext<glutin::PossiblyCurrent>,
     glow::Context,
@@ -40,19 +74,18 @@ fn create_display(
     (gl_window, gl)
 }
 
-pub fn glutin_event_loop(
-    receiver: oneshot::Receiver<MessageDispatcher>,
+pub fn run_event_loop(
+    event_loop: glutin::event_loop::EventLoop<BotfaceEvent>,
+    mut chatbox: Chatbox,
     frame_sender: mpsc::UnboundedSender<NDIFrameData>,
 ) -> Result<()> {
-    let message_dispatcher = receiver.blocking_recv()?;
-
     // egui/glow stuff
     let mut clear_color = [0.1, 0.1, 0.1];
 
-    let event_loop = glutin::event_loop::EventLoop::with_user_event();
     let (gl_window, gl) = create_display(&event_loop);
+    let rc_gl = Rc::new(gl);
 
-    let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), &gl);
+    let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), rc_gl.clone());
 
     event_loop.run(
         move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
@@ -60,12 +93,15 @@ pub fn glutin_event_loop(
                 let mut quit = false;
 
                 let needs_repaint = egui_glow.run(gl_window.window(), |egui_ctx| {
-                    egui::SidePanel::right("my_side_panel").show(egui_ctx, |ui| {
+                    egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
                         ui.heading("Hello World!");
                         if ui.button("Quit").clicked() {
                             quit = true;
                         }
                         ui.color_edit_button_rgb(&mut clear_color);
+                    });
+                    egui::Window::new("chat box").show(egui_ctx, |ui| {
+                        ui.add(&mut chatbox);
                     });
                 });
 
@@ -81,13 +117,13 @@ pub fn glutin_event_loop(
                 {
                     unsafe {
                         use glow::HasContext as _;
-                        gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
-                        gl.clear(glow::COLOR_BUFFER_BIT);
+                        rc_gl.clear_color(clear_color[0], clear_color[1], clear_color[2], 1.0);
+                        rc_gl.clear(glow::COLOR_BUFFER_BIT);
                     }
 
                     // draw things behind egui here
 
-                    egui_glow.paint(gl_window.window(), &gl);
+                    egui_glow.paint(gl_window.window());
 
                     // draw things on top of egui here
 
@@ -103,7 +139,7 @@ pub fn glutin_event_loop(
                                 return ();
                             }
                         };
-                    frame_data.get_pixels(&gl);
+                    frame_data.get_pixels(&rc_gl);
 
                     // send NDI video frame to async NDIPainter
                     match frame_sender.send(frame_data) {
@@ -142,7 +178,7 @@ pub fn glutin_event_loop(
                     ()
                 }
                 glutin::event::Event::LoopDestroyed => {
-                    egui_glow.destroy(&gl);
+                    egui_glow.destroy();
                     ()
                 }
 
