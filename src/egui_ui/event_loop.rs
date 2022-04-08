@@ -1,27 +1,34 @@
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 
+use glutin::event_loop::EventLoop;
+use glutin::event_loop::EventLoopProxy;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::egui_ui::Chatbox;
+use crate::egui_ui::ChatboxState;
 use crate::error::Result;
 use crate::irc::MessageDispatcher;
 use crate::ndi::NDIFrameData;
 
-pub enum BotfaceEvent {}
+pub enum BotfaceEvent {
+    Nonce,
+}
 
 pub struct Botface {
     chatbox: Chatbox,
-    event_loop: glutin::event_loop::EventLoop<BotfaceEvent>,
+    event_loop: EventLoop<BotfaceEvent>,
     frame_sender: mpsc::UnboundedSender<NDIFrameData>,
 }
 
 impl Botface {
     pub fn new(
-        receiver: oneshot::Receiver<MessageDispatcher>,
         frame_sender: mpsc::UnboundedSender<NDIFrameData>,
     ) -> Result<Self> {
-        let chatbox = Chatbox::new(receiver.blocking_recv()?);
         let event_loop = glutin::event_loop::EventLoop::<BotfaceEvent>::with_user_event();
+        let chatbox_state = Arc::new(Mutex::new(ChatboxState::new()));
+        let chatbox = Chatbox::new(chatbox_state);
         Ok(Self {
             chatbox,
             event_loop,
@@ -29,8 +36,12 @@ impl Botface {
         })
     }
 
-    pub async fn run_async_things(&self) {
-        self.chatbox.run(self.event_loop.create_proxy()).await;
+    pub fn chatbox_state(&self) -> Arc<Mutex<ChatboxState>> {
+        self.chatbox.state()
+    }
+
+    pub fn event_loop_proxy(&self) -> EventLoopProxy<BotfaceEvent> {
+        self.event_loop.create_proxy()
     }
 
     pub fn run_event_loop(self) -> Result<()> {
