@@ -18,12 +18,14 @@ anyhow = "~1.0"
 
 glow = "0.11"
 glutin = "0.28.0"
-egui_glow = "0.17.0"
-egui = { version = "0.17.0", default-features = false, features = [
-  "convert_bytemuck",
-  "single_threaded",
-] }
+#egui_glow = "0.17.0"
+egui_glow = { path = "/home/wayne/projects/egui/egui_glow", features = [ "epi", "winit", "persistence" ] }
+egui-winit = { path = "/home/wayne/projects/egui/egui-winit", features = [ "epi" ] }
 
+egui = { path = "/home/wayne/projects/egui/egui", default-features = true, features = [ "bytemuck" ] }
+epi = { path = "/home/wayne/projects/egui/epi", features = [ "file_storage" ] }
+epaint = { path = "/home/wayne/projects/egui/epaint" }
+egui_extras = { path = "/home/wayne/projects/egui/egui_extras" }
 ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
 
 twitch-irc = { version = "~4.0", features = [ "with-serde" ] }
@@ -33,6 +35,7 @@ tokio = { version = "~1.17", features = [
   "rt",
 ] }
 futures = "~0.3"
+lock_api = "~0.4"
 
 # config serialization/deserialization
 serde = "1.0"
