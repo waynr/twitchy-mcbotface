@@ -5,28 +5,26 @@ use std::sync::Mutex;
 use std::thread;
 
 use futures::future::join5;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
+use glutin::event_loop::EventLoopProxy;
+
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
-use tmbf::egui_ui::{Botface, ChatboxDispatcher};
-use tmbf::error::{Error, Result};
+use tmbf::egui_ui::{Botface, BotfaceEvent, ChatboxDispatcher, ChatboxState};
+use tmbf::error::Result;
 use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
 use tmbf::ndi::{NDIFrameData, NDIPainter};
 
 fn main() -> Result<()> {
-    let (md_sender, md_receiver) = oneshot::channel::<MessageDispatcher>();
     let (frame_sender, frame_receiver) = mpsc::unbounded_channel::<NDIFrameData>();
     let botface = Botface::new(frame_sender)?;
-    let chatbox_dispatcher = ChatboxDispatcher::new(
-        md_receiver.blocking_recv()?,
-        botface.chatbox_state(),
-        botface.event_loop_proxy(),
-    );
+    let chatbox_state = botface.chatbox_state();
+    let event_loop_proxy = botface.event_loop_proxy();
     thread::spawn(move || {
-        if let Err(error) = all_the_async_things(md_sender, frame_receiver, chatbox_dispatcher) {
+        if let Err(error) = all_the_async_things(frame_receiver, event_loop_proxy, chatbox_state) {
             println!("all (or some) of the async things failed: {}", error);
         }
     });
@@ -36,17 +34,15 @@ fn main() -> Result<()> {
 
 #[tokio::main]
 pub async fn all_the_async_things(
-    md_sender: oneshot::Sender<MessageDispatcher>,
     frame_receiver: mpsc::UnboundedReceiver<NDIFrameData>,
-    mut chatbox_dispatcher: ChatboxDispatcher,
+    event_loop_proxy: EventLoopProxy<BotfaceEvent>,
+    chatbox_state: Arc<Mutex<ChatboxState>>,
 ) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
     let mut contents = String::new();
 
     let mut ndi_painter = NDIPainter::new()?;
     let ndi_painter_handle = ndi_painter.run(frame_receiver);
-
-    let chatbox_dispatcher_handle = chatbox_dispatcher.run();
 
     file.read_to_string(&mut contents)?;
     let login_creds: StaticLoginCredentials = serde_yaml::from_str(&contents)?;
@@ -55,11 +51,9 @@ pub async fn all_the_async_things(
     let mut core = IrcCore::new();
     let join_dispatcher = core.get_msg_dispatcher();
 
-    if let Err(_error) = md_sender.send(join_dispatcher.clone()) {
-        return Err(Error::SomethingBad(String::from(
-            "Receiver<MessageDispatcher> dropped",
-        )));
-    }
+    let mut chatbox_dispatcher =
+        ChatboxDispatcher::new(join_dispatcher.clone(), chatbox_state, event_loop_proxy);
+    let chatbox_dispatcher_handle = chatbox_dispatcher.run();
 
     let run_irc_handle = core.run_irc(config);
 

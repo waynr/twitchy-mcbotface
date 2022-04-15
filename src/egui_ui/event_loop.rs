@@ -4,12 +4,12 @@ use std::sync::Mutex;
 
 use glutin::event_loop::EventLoop;
 use glutin::event_loop::EventLoopProxy;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+use epaint::text::{FontData, FontDefinitions, FontFamily};
 
 use crate::egui_ui::Chatbox;
 use crate::egui_ui::ChatboxState;
 use crate::error::Result;
-use crate::irc::MessageDispatcher;
 use crate::ndi::NDIFrameData;
 
 pub enum BotfaceEvent {
@@ -23,9 +23,7 @@ pub struct Botface {
 }
 
 impl Botface {
-    pub fn new(
-        frame_sender: mpsc::UnboundedSender<NDIFrameData>,
-    ) -> Result<Self> {
+    pub fn new(frame_sender: mpsc::UnboundedSender<NDIFrameData>) -> Result<Self> {
         let event_loop = glutin::event_loop::EventLoop::<BotfaceEvent>::with_user_event();
         let chatbox_state = Arc::new(Mutex::new(ChatboxState::new()));
         let chatbox = Chatbox::new(chatbox_state);
@@ -98,6 +96,23 @@ pub fn run_event_loop(
 
     let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), rc_gl.clone());
 
+    let mut font_definitions = FontDefinitions::default();
+    font_definitions.font_data.insert(
+        "hack-regular".to_owned(),
+        FontData::from_static(include_bytes!(
+            //"/usr/share/fonts/truetype/hack/Hack-Regular.ttf"
+            //"/usr/share/fonts/fonts-go/Go-Mono.ttf"
+            //"/usr/share/fonts/truetype/monoid/Monoid-Regular.ttf"
+            "/usr/share/fonts/truetype/firacode/FiraCode-Regular.ttf"
+        )),
+    );
+    font_definitions
+        .families
+        .get_mut(&FontFamily::Monospace)
+        .unwrap()
+        .insert(0, "hack-regular".to_owned());
+    egui_glow.egui_ctx.set_fonts(font_definitions);
+
     event_loop.run(
         move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
             let mut redraw = || {
@@ -111,8 +126,9 @@ pub fn run_event_loop(
                         }
                         ui.color_edit_button_rgb(&mut clear_color);
                     });
+                    let chatbox_context = egui_ctx.clone();
                     egui::Window::new("chat box").show(egui_ctx, |ui| {
-                        ui.add(&mut chatbox);
+                        chatbox.show(ui, chatbox_context);
                     });
                 });
 
@@ -172,6 +188,9 @@ pub fn run_event_loop(
                 // See: https://github.com/rust-windowing/winit/issues/1619
                 glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
                 glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
+
+                // BotFaceEvent received from some botface component like ChatBoxDispatcher
+                glutin::event::Event::UserEvent(_) => redraw(),
 
                 glutin::event::Event::WindowEvent { event, .. } => {
                     use glutin::event::WindowEvent;
