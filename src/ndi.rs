@@ -1,4 +1,6 @@
+use egui::State;
 use glow::{HasContext, PixelPackData};
+use winit::dpi::PhysicalSize;
 use ndi_sdk::send::{create_ndi_send_video_frame, FrameFormatType, SendColorFormat};
 use ndi_sdk::{load, SendInstance};
 use tokio::sync::mpsc;
@@ -22,8 +24,8 @@ impl NDIPainter {
 
     pub fn paint(&mut self, data: NDIFrameData) -> Result<()> {
         let frame_builder =
-            create_ndi_send_video_frame(data.width, data.height, FrameFormatType::Progressive)
-                .with_data(data.buf, data.width * 4, SendColorFormat::Rgba);
+            create_ndi_send_video_frame(data.size.x, data.size.y, FrameFormatType::Progressive)
+                .with_data(data.buf, data.size.x * 4, SendColorFormat::Rgba);
 
         let frame = frame_builder.build()?;
 
@@ -41,17 +43,56 @@ impl NDIPainter {
     }
 }
 
-pub struct NDIFrameData {
-    pub buf: Vec<u8>,
-    width: i32,
-    height: i32,
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Pos2 {
+    /// How far to the right.
+    pub x: i32,
+    /// How far down.
+    pub y: i32,
 }
 
-impl TryFrom<(i32, i32)> for NDIFrameData {
+impl From<emath::Pos2> for Pos2 {
+    fn from(pos: emath::Pos2) -> Self {
+        Self { x: pos.x.floor() as i32, y: pos.y.floor() as i32 }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Vec2 {
+    /// Rightwards. Width.
+    pub x: i32,
+    /// Downwards. Height.
+    pub y: i32,
+}
+
+impl From<emath::Vec2> for Vec2 {
+    fn from(vec: emath::Vec2) -> Self {
+        Self { x: vec.x.floor() as i32, y: vec.y.floor() as i32 }
+    }
+}
+
+impl From<PhysicalSize<u32>> for Vec2 {
+    fn from(size: PhysicalSize<u32>) -> Self {
+        Self { x: size.width as i32, y: size.height as i32 }
+    }
+}
+
+pub struct NDIFrameData {
+    pub buf: Vec<u8>,
+
+    position: Pos2,
+    size: Vec2,
+    outer_window_size: Vec2,
+}
+
+impl TryFrom<(State, PhysicalSize<u32>)> for NDIFrameData {
     type Error = Error;
 
-    fn try_from(t: (i32, i32)) -> Result<Self> {
-        let capacity: usize = TryInto::<usize>::try_into(t.0 * t.1)? * 4;
+    fn try_from(data: (State, PhysicalSize<u32>)) -> Result<Self> {
+        let size: Vec2 = data.0.size.into();
+        let position: Pos2 = data.0.pos.into();
+        let outer_window_size: Vec2 = data.1.into();
+        let capacity: usize = TryInto::<usize>::try_into(size.x * size.y)? * 4;
 
         let mut buf: Vec<u8> = Vec::with_capacity(capacity);
         for _ in 0..capacity {
@@ -63,8 +104,9 @@ impl TryFrom<(i32, i32)> for NDIFrameData {
 
         Ok(Self {
             buf,
-            width: t.0,
-            height: t.1,
+            position,
+            size,
+            outer_window_size,
         })
     }
 }
@@ -76,7 +118,16 @@ impl NDIFrameData {
             // from https://docs.gl/gl4/glReadPixels,
             // format = 0x1908 should match to GL_RGBA
             // gltype = 0x1401 should match to GL_UNSIGNED_BYTE
-            gl.read_pixels(0, 0, self.width, self.height, 0x1908, 0x1401, pixels);
+            println!("x: {}, y: {}", self.position.x, self.position.y);
+            gl.read_pixels(
+                self.position.x,
+                self.outer_window_size.y - (self.position.y + self.size.y),
+                self.size.x,
+                self.size.y,
+                0x1908,
+                0x1401,
+                pixels,
+            );
         }
     }
 }

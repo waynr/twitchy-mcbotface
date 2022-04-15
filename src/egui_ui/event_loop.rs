@@ -2,10 +2,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use egui::Id;
+use epaint::text::{FontData, FontDefinitions, FontFamily};
 use glutin::event_loop::EventLoop;
 use glutin::event_loop::EventLoopProxy;
 use tokio::sync::mpsc;
-use epaint::text::{FontData, FontDefinitions, FontFamily};
 
 use crate::egui_ui::Chatbox;
 use crate::egui_ui::ChatboxState;
@@ -112,6 +113,14 @@ pub fn run_event_loop(
         .unwrap()
         .insert(0, "hack-regular".to_owned());
     egui_glow.egui_ctx.set_fonts(font_definitions);
+    let image =
+        image::io::Reader::open("/home/wayne/visual/photos/darktable_exported/DSC04897.jpg")?
+            .decode()?;
+    let size = [image.width() as _, image.height() as _];
+    let image_buffer = image.to_rgba8();
+    let pixels = image_buffer.as_flat_samples();
+    let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+    let texture: egui::TextureHandle = egui_glow.egui_ctx.load_texture("my-image", color_image);
 
     event_loop.run(
         move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
@@ -126,8 +135,12 @@ pub fn run_event_loop(
                         }
                         ui.color_edit_button_rgb(&mut clear_color);
                     });
+                    egui::CentralPanel::default().show(egui_ctx, |ui| {
+                        ui.image(&texture, texture.size_vec2());
+                    });
                     let chatbox_context = egui_ctx.clone();
-                    egui::Window::new("chat box").show(egui_ctx, |ui| {
+                    let window = egui::Window::new("chat box");
+                    window.show(egui_ctx, |ui| {
                         chatbox.show(ui, chatbox_context);
                     });
                 });
@@ -154,28 +167,36 @@ pub fn run_event_loop(
 
                     // draw things on top of egui here
 
-                    // get window size
-                    let window_size = gl_window.window().inner_size();
+                    if let Some(state) = egui_glow
+                        .egui_ctx
+                        .memory()
+                        .areas
+                        .get(Id::new("chat box"))
+                        .cloned()
+                    {
+                        // get window size
+                        let window_size = gl_window.window().inner_size();
+                        //println!("state: {:?}", state);
 
-                    // prep NDI video frame
-                    let mut frame_data: NDIFrameData =
-                        match (window_size.width as i32, window_size.height as i32).try_into() {
+                        // prep NDI video frame
+                        let mut frame_data: NDIFrameData = match (state, window_size).try_into() {
                             Ok(fd) => fd,
                             Err(_) => {
                                 *control_flow = glutin::event_loop::ControlFlow::Exit;
                                 return ();
                             }
                         };
-                    frame_data.get_pixels(&rc_gl);
+                        frame_data.get_pixels(&rc_gl);
 
-                    // send NDI video frame to async NDIPainter
-                    match frame_sender.send(frame_data) {
-                        Err(_) => {
-                            *control_flow = glutin::event_loop::ControlFlow::Exit;
-                            return ();
-                        }
-                        _ => (),
-                    };
+                        // send NDI video frame to async NDIPainter
+                        match frame_sender.send(frame_data) {
+                            Err(_) => {
+                                *control_flow = glutin::event_loop::ControlFlow::Exit;
+                                return ();
+                            }
+                            _ => (),
+                        };
+                    }
 
                     gl_window.swap_buffers().unwrap();
                 }

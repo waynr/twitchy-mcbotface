@@ -21,12 +21,15 @@ glutin = "0.28.0"
 #egui_glow = "0.17.0"
 egui_glow = { path = "/home/wayne/projects/egui/egui_glow", features = [ "epi", "winit", "persistence" ] }
 egui-winit = { path = "/home/wayne/projects/egui/egui-winit", features = [ "epi" ] }
+winit = "0.26.1"
 
 egui = { path = "/home/wayne/projects/egui/egui", default-features = true, features = [ "bytemuck" ] }
 epi = { path = "/home/wayne/projects/egui/epi", features = [ "file_storage" ] }
 epaint = { path = "/home/wayne/projects/egui/epaint" }
+emath = { path = "/home/wayne/projects/egui/emath" }
 egui_extras = { path = "/home/wayne/projects/egui/egui_extras" }
 ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
+image = "~0.24"
 
 twitch-irc = { version = "~4.0", features = [ "with-serde" ] }
 
