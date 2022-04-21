@@ -107,12 +107,20 @@ impl Chatbox {
 
 // non-public fns
 impl Chatbox {
-    fn message_to_layout_job(&self, msg: &ChatMessage) -> LayoutJob {
+    fn message_to_layout_job(&self, msg: &ChatMessage, index: usize) -> LayoutJob {
+        let color = match index % 4 {
+            0 => Color32::LIGHT_RED,
+            1 => Color32::LIGHT_YELLOW,
+            2 => Color32::LIGHT_BLUE,
+            4 => Color32::LIGHT_GREEN,
+            _ => Color32::LIGHT_GRAY,
+        };
+
         let mut job = LayoutJob::single_section(
             msg.into(),
             TextFormat {
                 font_id: FontId::new(18.0, FontFamily::Monospace),
-                color: Color32::WHITE,
+                color,
                 ..Default::default()
             },
         );
@@ -123,16 +131,17 @@ impl Chatbox {
         job
     }
 
-    fn message_to_galley(&self, fonts: &Fonts, msg: &ChatMessage) -> Arc<Galley> {
-        fonts.layout_job(self.message_to_layout_job(msg))
+    fn message_to_galley(&self, fonts: &Fonts, msg: &ChatMessage, index: usize) -> Arc<Galley> {
+        fonts.layout_job(self.message_to_layout_job(msg, index))
     }
 
     fn convert_new_messages(&mut self, egui_ctx: &Context) {
         let _ = MappedRwLockReadGuard::map(egui_ctx.fonts(), |fonts| {
             let state = self.state.lock().unwrap();
             while state.messages.len() > self.rendered_messages.len() {
+                let index = self.rendered_messages.len();
                 self.rendered_messages.push(
-                    self.message_to_galley(fonts, &state.messages[self.rendered_messages.len()]),
+                    self.message_to_galley(fonts, &state.messages[index], index),
                 );
             }
             fonts
