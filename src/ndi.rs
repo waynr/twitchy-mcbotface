@@ -118,7 +118,6 @@ impl NDIFrameData {
             // from https://docs.gl/gl4/glReadPixels,
             // format = 0x1908 should match to GL_RGBA
             // gltype = 0x1401 should match to GL_UNSIGNED_BYTE
-            println!("x: {}, y: {}", self.position.x, self.position.y);
             gl.read_pixels(
                 self.position.x,
                 self.outer_window_size.y - (self.position.y + self.size.y),
