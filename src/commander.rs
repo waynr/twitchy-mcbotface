@@ -71,7 +71,7 @@ impl CommanderComposer {
                     }
                     if let Some(command) = words.next() {
                         match command {
-                            "help" => {
+                            "help" | "commands" => {
                                 let mut commands: Vec<String> = self
                                     .commanders
                                     .iter()
