@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use egui::Id;
+use epaint::textures::TextureFilter;
 use epaint::text::{FontData, FontDefinitions, FontFamily};
 use glutin::event_loop::EventLoop;
 use glutin::event_loop::EventLoopProxy;
@@ -93,9 +93,9 @@ pub fn run_event_loop(
     let mut clear_color = [0.1, 0.1, 0.1];
 
     let (gl_window, gl) = create_display(&event_loop);
-    let rc_gl = Rc::new(gl);
+    let rc_gl = Arc::new(gl);
 
-    let mut egui_glow = egui_glow::EguiGlow::new(gl_window.window(), rc_gl.clone());
+    let mut egui_glow = egui_glow::EguiGlow::new(&event_loop, rc_gl.clone());
 
     let mut font_definitions = FontDefinitions::default();
     font_definitions.font_data.insert(
@@ -120,14 +120,14 @@ pub fn run_event_loop(
     let image_buffer = image.to_rgba8();
     let pixels = image_buffer.as_flat_samples();
     let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-    let texture: egui::TextureHandle = egui_glow.egui_ctx.load_texture("my-image", color_image);
+    let texture: egui::TextureHandle = egui_glow.egui_ctx.load_texture("my-image", color_image, TextureFilter::Linear);
 
     event_loop.run(
         move |event, _, control_flow: &mut glutin::event_loop::ControlFlow| {
             let mut redraw = || {
                 let mut quit = false;
 
-                let needs_repaint = egui_glow.run(gl_window.window(), |egui_ctx| {
+                let repaint_after = egui_glow.run(gl_window.window(), |egui_ctx| {
                     egui::SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
                         ui.heading("Hello World!");
                         if ui.button("Quit").clicked() {
@@ -147,9 +147,13 @@ pub fn run_event_loop(
 
                 *control_flow = if quit {
                     glutin::event_loop::ControlFlow::Exit
-                } else if needs_repaint {
+                } else if repaint_after.is_zero() {
                     gl_window.window().request_redraw();
                     glutin::event_loop::ControlFlow::Poll
+                } else if let Some(repaint_after_instant) =
+                    std::time::Instant::now().checked_add(repaint_after)
+                {
+                    glutin::event_loop::ControlFlow::WaitUntil(repaint_after_instant)
                 } else {
                     glutin::event_loop::ControlFlow::Wait
                 };
