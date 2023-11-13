@@ -104,7 +104,8 @@ pub fn run_event_loop(
             //"/usr/share/fonts/truetype/hack/Hack-Regular.ttf"
             //"/usr/share/fonts/fonts-go/Go-Mono.ttf"
             //"/usr/share/fonts/truetype/monoid/Monoid-Regular.ttf"
-            "/usr/share/fonts/truetype/firacode/FiraCode-Regular.ttf"
+            //"/usr/share/fonts/truetype/firacode/FiraCode-Regular.ttf"
+            "/usr/share/fonts/TTF/FiraCodeNerdFontMono-Regular.ttf"
         )),
     );
     font_definitions
