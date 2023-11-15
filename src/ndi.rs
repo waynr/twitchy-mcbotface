@@ -1,9 +1,9 @@
-use egui::State;
-use glow::{HasContext, PixelPackData};
+use egui_glow::glow::{HasContext, PixelPackData};
 use winit::dpi::PhysicalSize;
 use ndi_sdk::send::{create_ndi_send_video_frame, FrameFormatType, SendColorFormat};
 use ndi_sdk::{load, SendInstance};
 use tokio::sync::mpsc;
+use emath::Rect;
 
 use crate::error::{Error, Result};
 
@@ -85,12 +85,12 @@ pub struct NDIFrameData {
     outer_window_size: Vec2,
 }
 
-impl TryFrom<(State, PhysicalSize<u32>)> for NDIFrameData {
+impl TryFrom<(Rect, PhysicalSize<u32>)> for NDIFrameData {
     type Error = Error;
 
-    fn try_from(data: (State, PhysicalSize<u32>)) -> Result<Self> {
-        let size: Vec2 = data.0.size.into();
-        let position: Pos2 = data.0.pos.into();
+    fn try_from(data: (Rect, PhysicalSize<u32>)) -> Result<Self> {
+        let size: Vec2 = Vec2 { x: data.0.width() as i32, y: data.0.height() as i32 };
+        let position: Pos2 = data.0.min.into();
         let outer_window_size: Vec2 = data.1.into();
         let capacity: usize = TryInto::<usize>::try_into(size.x * size.y)? * 4;
 
@@ -112,7 +112,7 @@ impl TryFrom<(State, PhysicalSize<u32>)> for NDIFrameData {
 }
 
 impl NDIFrameData {
-    pub fn get_pixels(&mut self, gl: &glow::Context) {
+    pub fn get_pixels(&mut self, gl: &egui_glow::painter::Context) {
         let pixels = PixelPackData::Slice(&mut self.buf);
         unsafe {
             // from https://docs.gl/gl4/glReadPixels,

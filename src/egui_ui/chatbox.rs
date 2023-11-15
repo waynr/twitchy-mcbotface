@@ -4,10 +4,9 @@ use std::sync::Mutex;
 
 use egui::text::LayoutJob;
 use egui::{Color32, Context, FontFamily, FontId, Response, Ui};
-use egui_extras::{Size, TableBuilder};
+use egui_extras::{Column, TableBuilder};
 use epaint::text::TextWrapping;
 use epaint::text::{Fonts, Galley, TextFormat};
-use glutin::event_loop::EventLoopProxy;
 use lock_api::MappedRwLockReadGuard;
 use twitch_irc::message::PrivmsgMessage;
 use twitch_irc::message::ServerMessage;
@@ -82,7 +81,7 @@ impl Chatbox {
         egui::CentralPanel::default().show_inside(ui, |top_ui| {
             TableBuilder::new(top_ui)
                 .striped(true)
-                .column(Size::relative(1.0))
+                .column(Column::auto_with_initial_suggestion(1.0))
                 .body(|mut body| {
                     let widths = body.widths();
                     if self.width != widths[0] {
@@ -136,15 +135,16 @@ impl Chatbox {
     }
 
     fn convert_new_messages(&mut self, egui_ctx: &Context) {
-        let _ = MappedRwLockReadGuard::map(egui_ctx.fonts(), |fonts| {
+        egui_ctx.fonts(|fonts| {
             let state = self.state.lock().unwrap();
             while state.messages.len() > self.rendered_messages.len() {
                 let index = self.rendered_messages.len();
-                self.rendered_messages.push(
-                    self.message_to_galley(fonts, &state.messages[index], index),
-                );
+                self.rendered_messages.push(self.message_to_galley(
+                    fonts,
+                    &state.messages[index],
+                    index,
+                ));
             }
-            fonts
         });
     }
 }
@@ -152,34 +152,25 @@ impl Chatbox {
 pub struct ChatboxDispatcher {
     message_dispatcher: MessageDispatcher,
     state: Arc<Mutex<ChatboxState>>,
-    proxy: EventLoopProxy<BotfaceEvent>,
 }
 
 impl ChatboxDispatcher {
-    pub fn new(
-        message_dispatcher: MessageDispatcher,
-        state: Arc<Mutex<ChatboxState>>,
-        proxy: EventLoopProxy<BotfaceEvent>,
-    ) -> Self {
+    pub fn new(message_dispatcher: MessageDispatcher, state: Arc<Mutex<ChatboxState>>) -> Self {
         Self {
             message_dispatcher,
             state,
-            proxy,
         }
     }
 
     pub async fn run(&mut self) {
         while let Ok(message) = self.message_dispatcher.receiver.recv().await {
             match message {
-                ServerMessage::Privmsg(msg) => {
-                    match self.state.lock() {
-                        Ok(mut cbstate) => {
-                            (*cbstate).messages.push(msg.into());
-                        }
-                        Err(e) => eprintln!("{:?}", e),
+                ServerMessage::Privmsg(msg) => match self.state.lock() {
+                    Ok(mut cbstate) => {
+                        (*cbstate).messages.push(msg.into());
                     }
-                    self.proxy.send_event(BotfaceEvent::Nonce);
-                }
+                    Err(e) => eprintln!("{:?}", e),
+                },
                 _ => (),
             }
         }

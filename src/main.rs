@@ -10,8 +10,6 @@ use tokio::sync::mpsc;
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
-use glutin::event_loop::EventLoopProxy;
-
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
 use tmbf::egui_ui::{Botface, BotfaceEvent, ChatboxDispatcher, ChatboxState};
 use tmbf::error::Result;
@@ -22,20 +20,17 @@ fn main() -> Result<()> {
     let (frame_sender, frame_receiver) = mpsc::unbounded_channel::<NDIFrameData>();
     let botface = Botface::new(frame_sender)?;
     let chatbox_state = botface.chatbox_state();
-    let event_loop_proxy = botface.event_loop_proxy();
     thread::spawn(move || {
-        if let Err(error) = all_the_async_things(frame_receiver, event_loop_proxy, chatbox_state) {
+        if let Err(error) = all_the_async_things(frame_receiver, chatbox_state) {
             println!("all (or some) of the async things failed: {}", error);
         }
     });
-
-    botface.run_event_loop()
+    Ok(())
 }
 
 #[tokio::main]
 pub async fn all_the_async_things(
     frame_receiver: mpsc::UnboundedReceiver<NDIFrameData>,
-    event_loop_proxy: EventLoopProxy<BotfaceEvent>,
     chatbox_state: Arc<Mutex<ChatboxState>>,
 ) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
@@ -52,7 +47,7 @@ pub async fn all_the_async_things(
     let join_dispatcher = core.get_msg_dispatcher();
 
     let mut chatbox_dispatcher =
-        ChatboxDispatcher::new(join_dispatcher.clone(), chatbox_state, event_loop_proxy);
+        ChatboxDispatcher::new(join_dispatcher.clone(), chatbox_state);
     let chatbox_dispatcher_handle = chatbox_dispatcher.run();
 
     let run_irc_handle = core.run_irc(config);

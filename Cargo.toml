@@ -14,20 +14,16 @@ path = "src/main.rs"
 [dependencies]
 
 thiserror = "~1.0"
-anyhow = "~1.0"
 
 glow = "0.11"
-glutin = "0.28.0"
-#egui_glow = "0.17.0"
-egui_glow = { path = "/home/wayne/projects/egui/egui_glow", features = [ "epi", "winit", "persistence" ] }
-egui-winit = { path = "/home/wayne/projects/egui/egui-winit", features = [ "epi" ] }
-winit = "0.26.1"
+egui_glow = { version = "0.23.0", features = [ "winit" ] }
+winit = "0.28"
 
-egui = { path = "/home/wayne/projects/egui/egui", default-features = true, features = [ "bytemuck" ] }
-epi = { path = "/home/wayne/projects/egui/epi", features = [ "file_storage" ] }
-epaint = { path = "/home/wayne/projects/egui/epaint" }
-emath = { path = "/home/wayne/projects/egui/emath" }
-egui_extras = { path = "/home/wayne/projects/egui/egui_extras" }
+egui = { version = "0.23.0", default-features = true, features = ["bytemuck"] }
+epaint = "0.23.0"
+emath = "0.23.0"
+egui_extras = "0.23.0"
+
 ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
 image = "~0.24"
 
@@ -41,7 +37,6 @@ futures = "~0.3"
 lock_api = "~0.4"
 
 # config serialization/deserialization
-serde = "1.0"
 serde_yaml = "0.8"
 
 unicode-segmentation = "~1.9"
