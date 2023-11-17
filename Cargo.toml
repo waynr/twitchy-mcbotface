@@ -24,6 +24,10 @@ epaint = "0.23.0"
 emath = "0.23.0"
 egui_extras = "0.23.0"
 
+bevy = "0.12"
+bevy_egui = "0.23"
+bevy_image_export = { path = "/home/wayne/projects/bevy_render_to_image" }
+
 ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
 image = "~0.24"
 

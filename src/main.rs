@@ -4,40 +4,37 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use futures::future::join5;
-use tokio::sync::mpsc;
+use futures::future::join4;
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
-use tmbf::egui_ui::{Botface, BotfaceEvent, ChatboxDispatcher, ChatboxState};
 use tmbf::error::Result;
 use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
-use tmbf::ndi::{NDIFrameData, NDIPainter};
+use tmbf::bevy_ui::Botface;
+use tmbf::bevy_ui::ChatboxState;
+use tmbf::bevy_ui::ChatboxDispatcher;
 
 fn main() -> Result<()> {
-    let (frame_sender, frame_receiver) = mpsc::unbounded_channel::<NDIFrameData>();
-    let botface = Botface::new(frame_sender)?;
+    let botface = Botface::new()?;
     let chatbox_state = botface.chatbox_state();
     thread::spawn(move || {
-        if let Err(error) = all_the_async_things(frame_receiver, chatbox_state) {
+        if let Err(error) = all_the_async_things(chatbox_state) {
             println!("all (or some) of the async things failed: {}", error);
         }
     });
+
+    botface.run();
     Ok(())
 }
 
 #[tokio::main]
 pub async fn all_the_async_things(
-    frame_receiver: mpsc::UnboundedReceiver<NDIFrameData>,
     chatbox_state: Arc<Mutex<ChatboxState>>,
 ) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
     let mut contents = String::new();
-
-    let mut ndi_painter = NDIPainter::new()?;
-    let ndi_painter_handle = ndi_painter.run(frame_receiver);
 
     file.read_to_string(&mut contents)?;
     let login_creds: StaticLoginCredentials = serde_yaml::from_str(&contents)?;
@@ -71,11 +68,10 @@ pub async fn all_the_async_things(
         }
     });
 
-    let (_, run_irc_result, joiner_result, _, _) = join5(
+    let (_, run_irc_result, joiner_result, _) = join4(
         cmdr_handle,
         run_irc_handle,
         joiner_handler,
-        ndi_painter_handle,
         chatbox_dispatcher_handle,
     )
     .await;

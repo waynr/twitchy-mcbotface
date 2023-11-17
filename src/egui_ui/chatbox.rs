@@ -7,11 +7,9 @@ use egui::{Color32, Context, FontFamily, FontId, Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use epaint::text::TextWrapping;
 use epaint::text::{Fonts, Galley, TextFormat};
-use lock_api::MappedRwLockReadGuard;
 use twitch_irc::message::PrivmsgMessage;
 use twitch_irc::message::ServerMessage;
 
-use crate::egui_ui::BotfaceEvent;
 use crate::irc::MessageDispatcher;
 
 struct ChatMessage {
