@@ -23,20 +23,12 @@ opt-level = 3
 
 thiserror = "~1.0"
 
-glow = "0.11"
-egui_glow = { version = "0.23.0", features = [ "winit" ] }
+bevy = "0.12"
 winit = "0.28"
 
-egui = { version = "0.23.0", default-features = true, features = ["bytemuck"] }
-epaint = "0.23.0"
-emath = "0.23.0"
-egui_extras = "0.23.0"
-
-bevy = "0.12"
-bevy_egui = "0.23"
+# provides NDIExportPlugin
 bevy_image_export = { path = "/home/wayne/projects/bevy_render_to_image" }
 
-ndi-sdk = { path = "/home/wayne/projects/rust-ndi" }
 image = "~0.24"
 
 twitch-irc = { version = "~4.0", features = [ "with-serde" ] }
@@ -46,7 +38,6 @@ tokio = { version = "~1.17", features = [
   "rt",
 ] }
 futures = "~0.3"
-lock_api = "~0.4"
 
 # config serialization/deserialization
 serde_yaml = "0.8"

@@ -1,4 +1,3 @@
-use std::f32::consts::PI;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -13,12 +12,13 @@ use bevy::{
     window::WindowResolution,
     winit::WinitSettings,
 };
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_image_export::{ImageExportSource, NDIExport, NDIExportBundle, NDIExportPlugin};
 
-use super::egui_ui::Chatbox;
-pub use super::egui_ui::ChatboxDispatcher;
-pub use super::egui_ui::ChatboxState;
+pub mod chatbox;
+use chatbox::Chatbox;
+pub use chatbox::ChatboxDispatcher;
+pub use chatbox::ChatboxState;
+
 use super::error::Result;
 
 pub enum BotfaceEvent {
@@ -53,11 +53,9 @@ impl Botface {
             NDIExportPlugin,
             bevy::diagnostic::FrameTimeDiagnosticsPlugin,
             bevy::diagnostic::LogDiagnosticsPlugin { ..default() },
-            EguiPlugin,
         ))
         .insert_resource(ClearColor(Color::NONE))
-        .add_systems(Startup, setup)
-        .add_systems(Update, egui_chatbox);
+        .add_systems(Startup, setup);
 
         Ok(Self { chatbox, app })
     }
@@ -127,10 +125,4 @@ fn setup(
         }
     }
 
-}
-
-fn egui_chatbox(mut contexts: EguiContexts) {
-    egui::Window::new("hello").show(contexts.ctx_mut(), |ui| {
-        ui.label("world");
-    });
 }
