@@ -120,32 +120,6 @@ fn setup(
             });
         });
 
-    let cube_handle = meshes.add(Mesh::from(shape::Cube { size: 2.0 }));
-    let default_material = StandardMaterial {
-        base_color: Color::rgb(0.2, 0.7, 0.6),
-        reflectance: 0.2,
-        unlit: false,
-        ..default()
-    };
-    let preview_material_handle = materials.add(default_material.clone());
-
-    // The cube that will be rendered to the texture.
-    commands.spawn(PbrBundle {
-        mesh: cube_handle,
-        material: preview_material_handle,
-        transform: Transform {
-            rotation: Quat::from_xyzw(0.4, 0.2, 0.2, 1.0),
-            ..default()
-        },
-        ..default()
-    });
-
-    // Light
-    // NOTE: Currently lights are shared between passes - see https://github.com/bevyengine/bevy/issues/3462
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
-        ..default()
-    });
 
     match NDIExport::new("chatbox".to_string()) {
         Err(e) => eprintln!("failed to initialize NDIExport: {e}"),
