@@ -230,7 +230,7 @@ fn update_node_bundle(message: &str, user: &str, node_bundle_ec: &mut EntityComm
     };
 
     node_bundle_ec.with_children(|child_builder| {
-        let text_bundle = Text2dBundle {
+        let text_bundle = TextBundle {
             text: Text {
                 sections: vec![
                     TextSection::new(format!("{user} "), username_style.clone()),
