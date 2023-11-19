@@ -102,7 +102,7 @@ impl IrcCore {
     pub async fn server_message_handler(
         mut incoming_messages: mpsc::UnboundedReceiver<ServerMessage>,
         sender: broadcast::Sender<ServerMessage>,
-        client: TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>,
+        _client: TwitchIRCClient<SecureTCPTransport, StaticLoginCredentials>,
     ) {
         while let Some(message) = incoming_messages.recv().await {
             match message {

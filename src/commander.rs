@@ -10,13 +10,13 @@ pub trait IrcCommander {
 }
 
 pub struct HardCodedCommander {
-    static_commands_file: String,
+    //static_commands_file: String,
 }
 
 impl HardCodedCommander {
-    pub fn new(static_commands_file: String) -> Self {
+    pub fn new(_static_commands_file: String) -> Self {
         Self {
-            static_commands_file,
+            //static_commands_file,
         }
     }
 }

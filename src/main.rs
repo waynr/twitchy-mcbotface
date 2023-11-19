@@ -1,7 +1,5 @@
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
 
 use futures::future::join4;
@@ -11,7 +9,7 @@ use twitch_irc::ClientConfig;
 
 use tmbf::commander::{CommanderComposer, HardCodedCommander};
 use tmbf::error::Result;
-use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage, MessageDispatcher};
+use tmbf::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
 use tmbf::bevy_ui::Botface;
 use tmbf::bevy_ui::ChatboxState;
 use tmbf::bevy_ui::ChatboxDispatcher;
