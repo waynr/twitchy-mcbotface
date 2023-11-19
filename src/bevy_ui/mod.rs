@@ -127,7 +127,7 @@ fn setup(
         });
 
     let box_size = Vec2::new(1000.0, 500.0);
-    let box_position = Vec2::new(0.0, -250.0);
+    //let box_position = Vec2::new(0.0, -250.0);
 
     let nb = (
         NodeBundle {
@@ -143,20 +143,7 @@ fn setup(
         },
         ChatNodeBundle,
     );
-
-    commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                color: Color::WHITE,
-                custom_size: Some(box_size.clone()),
-                ..default()
-            },
-            transform: Transform::from_translation(box_position.extend(0.0)),
-            ..default()
-        })
-        .with_children(|builder| {
-            builder.spawn(nb);
-        });
+    commands.spawn(nb);
 
     match NDIExport::new("chatbox".to_string()) {
         Err(e) => eprintln!("failed to initialize NDIExport: {e}"),
@@ -239,6 +226,7 @@ fn update_node_bundle(message: &str, user: &str, node_bundle_ec: &mut EntityComm
                 alignment: TextAlignment::Left,
                 linebreak_behavior: BreakLineOn::WordBoundary,
             },
+            transform: Transform::from_translation(Vec3::Z),
             ..default()
         };
         child_builder.spawn(text_bundle);
