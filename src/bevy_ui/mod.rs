@@ -1,5 +1,8 @@
+use std::time::Instant;
+
 use bevy::{
     ecs::query::QuerySingleError,
+    ecs::system::EntityCommands,
     prelude::*,
     render::{
         camera::RenderTarget,
@@ -7,8 +10,7 @@ use bevy::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
     },
-    sprite::Anchor,
-    text::{BreakLineOn, Text2dBounds},
+    text::BreakLineOn,
     window::WindowResolution,
     winit::WinitSettings,
 };
@@ -19,6 +21,15 @@ pub use chatbox::ChatboxDispatcher;
 pub use chatbox::ChatboxState;
 
 use super::error::Result;
+
+#[derive(Component)]
+struct Name(String);
+
+#[derive(Component)]
+struct Message(String);
+
+#[derive(Component)]
+struct MessageReceivedTime(Instant);
 
 pub enum BotfaceEvent {
     Nonce,
@@ -54,7 +65,7 @@ impl Botface {
         ))
         .insert_resource(ClearColor(Color::NONE))
         .insert_resource(chatbox_state.clone())
-        .add_systems(Update, chat_text_bundle_update_system)
+        .add_systems(Update, new_chat_message_event)
         .add_systems(Startup, setup);
 
         Ok(Self { chatbox_state, app })
@@ -73,8 +84,6 @@ fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut export_sources: ResMut<Assets<ImageExportSource>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let output_texture_handle = {
         let size = Extent3d {
@@ -120,41 +129,33 @@ fn setup(
     let box_size = Vec2::new(1000.0, 500.0);
     let box_position = Vec2::new(0.0, -250.0);
 
-    let text_style = TextStyle {
-        font_size: 42.0,
-        color: Color::WHITE,
-        ..default()
-    };
+    let nb = (
+        NodeBundle {
+            style: Style {
+                width: Val::Px(box_size.x),
+                height: Val::Px(box_size.y),
+                justify_content: JustifyContent::FlexEnd,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            background_color: Color::rgb(0.0, 0.25, 0.75).into(),
+            ..default()
+        },
+        ChatNodeBundle,
+    );
 
     commands
         .spawn(SpriteBundle {
             sprite: Sprite {
-                color: Color::rgb(0.0, 0.25, 0.75),
-                custom_size: Some(Vec2::new(box_size.x, box_size.y)),
+                color: Color::WHITE,
+                custom_size: Some(box_size.clone()),
                 ..default()
             },
             transform: Transform::from_translation(box_position.extend(0.0)),
             ..default()
         })
         .with_children(|builder| {
-            builder.spawn((
-                Text2dBundle {
-                    text: Text {
-                        sections: vec![TextSection::new("meow", text_style.clone())],
-                        alignment: TextAlignment::Left,
-                        linebreak_behavior: BreakLineOn::WordBoundary,
-                    },
-                    text_2d_bounds: Text2dBounds { size: box_size },
-                    transform: Transform::from_translation(Vec3::new(
-                        box_size.x / -2.0,
-                        box_size.y / -2.0,
-                        1.0,
-                    )),
-                    text_anchor: Anchor::BottomLeft,
-                    ..default()
-                },
-                ChatTextBundle,
-            ));
+            builder.spawn(nb);
         });
 
     match NDIExport::new("chatbox".to_string()) {
@@ -169,29 +170,56 @@ fn setup(
 }
 
 #[derive(Component)]
-struct ChatTextBundle;
+struct ChatNodeBundle;
 
-fn chat_text_bundle_update_system(
-    mut query: Query<&mut Text, With<ChatTextBundle>>,
+fn new_chat_message_event(
+    mut commands: Commands,
     chatbox_state: Res<ChatboxState>,
+    user_query: Query<(Entity, &Name)>,
+    mut chat_node_bundle: Query<(Entity, With<ChatNodeBundle>)>,
 ) {
-    let mut text = match query.get_single_mut() {
-        Ok(text) => text,
+    let node_bundle_id = match chat_node_bundle.get_single_mut() {
+        Ok(id) => id.0,
         Err(QuerySingleError::NoEntities(_)) => {
-            bevy::log::error!("no ChatTextBundle entity found");
+            bevy::log::error!("no ChatNodeBundle entity found");
             return;
         }
         Err(QuerySingleError::MultipleEntities(_)) => {
-            bevy::log::error!("unexpectedly many ChatTextBundle entities found");
+            bevy::log::error!("unexpectedly many ChatNodeBundle entities found");
             return;
         }
     };
-    let messages = chatbox_state
-        .messages
-        .lock()
-        .expect("TODO: gracefully handle PoisonError");
 
-    let username_style = TextStyle {
+    let mut incoming = chatbox_state.incoming.lock().expect("TODO");
+    let mut messages = chatbox_state.messages.lock().expect("TODO");
+
+    for message in incoming.drain(..) {
+        let user_id = if let Some(entity) = user_query.iter().find(|(_, n)| n.0 == message.user) {
+            commands.get_entity(entity.0).unwrap().id()
+        } else {
+            commands.spawn(Name(message.user.clone())).id()
+        };
+        commands
+            .spawn(Message(message.message.clone()))
+            .set_parent(user_id);
+
+        let mut nb_commands = if let Some(nb_commands) = commands.get_entity(node_bundle_id) {
+            nb_commands
+        } else {
+            return; // no entity found
+        };
+
+        update_node_bundle(
+            message.message.as_str(),
+            message.user.as_str(),
+            &mut nb_commands,
+        );
+        messages.push(message);
+    }
+}
+
+fn update_node_bundle(message: &str, user: &str, node_bundle_ec: &mut EntityCommands) {
+    let username_style = &TextStyle {
         font_size: 50.0,
         color: Color::RED,
         ..default()
@@ -200,17 +228,19 @@ fn chat_text_bundle_update_system(
         font_size: 42.0,
         ..default()
     };
-    text.sections = messages
-        .iter()
-        .map(|m| {
-            vec![
-                TextSection::new("\n".to_string(), username_style.clone()),
-                TextSection::new(m.user.clone(), username_style.clone()),
-                TextSection::new(" ".to_string(), username_style.clone()),
-                TextSection::new(m.message.clone(), message_style.clone()),
-            ]
-            .into_iter()
-        })
-        .flatten()
-        .collect();
+
+    node_bundle_ec.with_children(|child_builder| {
+        let text_bundle = Text2dBundle {
+            text: Text {
+                sections: vec![
+                    TextSection::new(format!("{user} "), username_style.clone()),
+                    TextSection::new(format!("{message} "), message_style.clone()),
+                ],
+                alignment: TextAlignment::Left,
+                linebreak_behavior: BreakLineOn::WordBoundary,
+            },
+            ..default()
+        };
+        child_builder.spawn(text_bundle);
+    });
 }

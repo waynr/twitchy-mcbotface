@@ -51,9 +51,9 @@ impl ChatboxDispatcher {
     pub async fn run(&mut self) {
         while let Ok(message) = self.message_dispatcher.receiver.recv().await {
             match message {
-                ServerMessage::Privmsg(msg) => match self.state.messages.lock() {
-                    Ok(mut messages) => {
-                        messages.push(msg.into());
+                ServerMessage::Privmsg(msg) => match self.state.incoming.lock() {
+                    Ok(mut incoming) => {
+                        incoming.push(msg.into());
                     }
                     Err(e) => eprintln!("{:?}", e),
                 },
@@ -66,4 +66,5 @@ impl ChatboxDispatcher {
 #[derive(Clone, Resource, Default)]
 pub struct ChatboxState {
     pub(crate) messages: Arc<Mutex<Vec<ChatMessage>>>,
+    pub(crate) incoming: Arc<Mutex<Vec<ChatMessage>>>,
 }
