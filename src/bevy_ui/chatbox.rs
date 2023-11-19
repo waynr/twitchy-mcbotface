@@ -2,14 +2,16 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use bevy::prelude::*;
 use twitch_irc::message::PrivmsgMessage;
 use twitch_irc::message::ServerMessage;
 
 use crate::irc::MessageDispatcher;
 
-struct ChatMessage {
-    user: String,
-    message: String,
+#[derive(Default)]
+pub(crate) struct ChatMessage {
+    pub(crate) user: String,
+    pub(crate) message: String,
 }
 
 impl From<PrivmsgMessage> for ChatMessage {
@@ -33,40 +35,13 @@ impl fmt::Display for ChatMessage {
     }
 }
 
-pub struct ChatboxState {
-    messages: Vec<ChatMessage>,
-}
-
-impl ChatboxState {
-    pub fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
-    }
-}
-
-pub struct Chatbox {
-    state: Arc<Mutex<ChatboxState>>,
-}
-
-// public fns
-impl Chatbox {
-    pub fn new(state: Arc<Mutex<ChatboxState>>) -> Self {
-        Self { state }
-    }
-
-    pub fn state(&self) -> Arc<Mutex<ChatboxState>> {
-        self.state.clone()
-    }
-}
-
 pub struct ChatboxDispatcher {
     message_dispatcher: MessageDispatcher,
-    state: Arc<Mutex<ChatboxState>>,
+    state: ChatboxState,
 }
 
 impl ChatboxDispatcher {
-    pub fn new(message_dispatcher: MessageDispatcher, state: Arc<Mutex<ChatboxState>>) -> Self {
+    pub fn new(message_dispatcher: MessageDispatcher, state: ChatboxState) -> Self {
         Self {
             message_dispatcher,
             state,
@@ -76,9 +51,9 @@ impl ChatboxDispatcher {
     pub async fn run(&mut self) {
         while let Ok(message) = self.message_dispatcher.receiver.recv().await {
             match message {
-                ServerMessage::Privmsg(msg) => match self.state.lock() {
-                    Ok(mut cbstate) => {
-                        (*cbstate).messages.push(msg.into());
+                ServerMessage::Privmsg(msg) => match self.state.messages.lock() {
+                    Ok(mut messages) => {
+                        messages.push(msg.into());
                     }
                     Err(e) => eprintln!("{:?}", e),
                 },
@@ -86,4 +61,9 @@ impl ChatboxDispatcher {
             }
         }
     }
+}
+
+#[derive(Clone, Resource, Default)]
+pub struct ChatboxState {
+    pub(crate) messages: Arc<Mutex<Vec<ChatMessage>>>,
 }

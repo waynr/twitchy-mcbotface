@@ -31,7 +31,7 @@ fn main() -> Result<()> {
 
 #[tokio::main]
 pub async fn all_the_async_things(
-    chatbox_state: Arc<Mutex<ChatboxState>>,
+    chatbox_state: ChatboxState,
 ) -> Result<()> {
     let mut file = File::open("/home/wayne/.config/twitchy-mcbotface/auth.yml")?;
     let mut contents = String::new();

@@ -1,7 +1,5 @@
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use bevy::{
+    ecs::query::QuerySingleError,
     prelude::*,
     render::{
         camera::RenderTarget,
@@ -9,13 +7,14 @@ use bevy::{
             Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
         },
     },
+    sprite::Anchor,
+    text::{BreakLineOn, Text2dBounds},
     window::WindowResolution,
     winit::WinitSettings,
 };
 use bevy_image_export::{ImageExportSource, NDIExport, NDIExportBundle, NDIExportPlugin};
 
 pub mod chatbox;
-use chatbox::Chatbox;
 pub use chatbox::ChatboxDispatcher;
 pub use chatbox::ChatboxState;
 
@@ -26,14 +25,13 @@ pub enum BotfaceEvent {
 }
 
 pub struct Botface {
-    chatbox: Chatbox,
+    chatbox_state: ChatboxState,
     app: App,
 }
 
 impl Botface {
     pub fn new() -> Result<Self> {
-        let chatbox_state = Arc::new(Mutex::new(ChatboxState::new()));
-        let chatbox = Chatbox::new(chatbox_state);
+        let chatbox_state = ChatboxState::default();
 
         let mut app = App::new();
         app.insert_resource(WinitSettings {
@@ -52,16 +50,18 @@ impl Botface {
             }),
             NDIExportPlugin,
             bevy::diagnostic::FrameTimeDiagnosticsPlugin,
-            bevy::diagnostic::LogDiagnosticsPlugin { ..default() },
+            //bevy::diagnostic::LogDiagnosticsPlugin { ..default() },
         ))
         .insert_resource(ClearColor(Color::NONE))
+        .insert_resource(chatbox_state.clone())
+        .add_systems(Update, chat_text_bundle_update_system)
         .add_systems(Startup, setup);
 
-        Ok(Self { chatbox, app })
+        Ok(Self { chatbox_state, app })
     }
 
-    pub fn chatbox_state(&self) -> Arc<Mutex<ChatboxState>> {
-        self.chatbox.state()
+    pub fn chatbox_state(&self) -> ChatboxState {
+        self.chatbox_state.clone()
     }
 
     pub fn run(mut self) {
@@ -78,8 +78,8 @@ fn setup(
 ) {
     let output_texture_handle = {
         let size = Extent3d {
-            width: 768,
-            height: 768,
+            width: 1920,
+            height: 1080,
             ..default()
         };
         let mut export_texture = Image {
@@ -104,10 +104,7 @@ fn setup(
 
     commands
         .spawn(Camera2dBundle {
-            transform: Transform {
-                translation: Vec3::Z * 4.0,
-                ..default()
-            },
+            transform: Transform { ..default() },
             ..default()
         })
         .with_children(|parent| {
@@ -120,6 +117,45 @@ fn setup(
             });
         });
 
+    let box_size = Vec2::new(1000.0, 500.0);
+    let box_position = Vec2::new(0.0, -250.0);
+
+    let text_style = TextStyle {
+        font_size: 42.0,
+        color: Color::WHITE,
+        ..default()
+    };
+
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                color: Color::rgb(0.0, 0.25, 0.75),
+                custom_size: Some(Vec2::new(box_size.x, box_size.y)),
+                ..default()
+            },
+            transform: Transform::from_translation(box_position.extend(0.0)),
+            ..default()
+        })
+        .with_children(|builder| {
+            builder.spawn((
+                Text2dBundle {
+                    text: Text {
+                        sections: vec![TextSection::new("meow", text_style.clone())],
+                        alignment: TextAlignment::Left,
+                        linebreak_behavior: BreakLineOn::WordBoundary,
+                    },
+                    text_2d_bounds: Text2dBounds { size: box_size },
+                    transform: Transform::from_translation(Vec3::new(
+                        box_size.x / -2.0,
+                        box_size.y / -2.0,
+                        1.0,
+                    )),
+                    text_anchor: Anchor::BottomLeft,
+                    ..default()
+                },
+                ChatTextBundle,
+            ));
+        });
 
     match NDIExport::new("chatbox".to_string()) {
         Err(e) => eprintln!("failed to initialize NDIExport: {e}"),
@@ -130,4 +166,51 @@ fn setup(
             });
         }
     }
+}
+
+#[derive(Component)]
+struct ChatTextBundle;
+
+fn chat_text_bundle_update_system(
+    mut query: Query<&mut Text, With<ChatTextBundle>>,
+    chatbox_state: Res<ChatboxState>,
+) {
+    let mut text = match query.get_single_mut() {
+        Ok(text) => text,
+        Err(QuerySingleError::NoEntities(_)) => {
+            bevy::log::error!("no ChatTextBundle entity found");
+            return;
+        }
+        Err(QuerySingleError::MultipleEntities(_)) => {
+            bevy::log::error!("unexpectedly many ChatTextBundle entities found");
+            return;
+        }
+    };
+    let messages = chatbox_state
+        .messages
+        .lock()
+        .expect("TODO: gracefully handle PoisonError");
+
+    let username_style = TextStyle {
+        font_size: 50.0,
+        color: Color::RED,
+        ..default()
+    };
+    let message_style = TextStyle {
+        font_size: 42.0,
+        ..default()
+    };
+    text.sections = messages
+        .iter()
+        .map(|m| {
+            vec![
+                TextSection::new("\n".to_string(), username_style.clone()),
+                TextSection::new(m.user.clone(), username_style.clone()),
+                TextSection::new(" ".to_string(), username_style.clone()),
+                TextSection::new(m.message.clone(), message_style.clone()),
+            ]
+            .into_iter()
+        })
+        .flatten()
+        .collect();
 }
