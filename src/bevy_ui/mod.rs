@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bevy::{
     ecs::query::QuerySingleError,
@@ -49,6 +49,7 @@ impl Botface {
             return_from_run: true,
             ..default()
         })
+        .insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f64(1.0/60.0)))
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
@@ -65,7 +66,12 @@ impl Botface {
         ))
         .insert_resource(ClearColor(Color::NONE))
         .insert_resource(chatbox_state.clone())
-        .add_systems(Update, new_chat_message_event)
+        .init_resource::<Events<ApplyChatMessagesGradient>>()
+        .add_systems(FixedUpdate, new_chat_message_event)
+        .add_systems(
+            FixedUpdate,
+            apply_chat_messages_gradient.after(new_chat_message_event),
+        )
         .add_systems(Startup, setup);
 
         Ok(Self { chatbox_state, app })
@@ -138,7 +144,6 @@ fn setup(
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            background_color: Color::rgb(0.0, 0.25, 0.75).into(),
             ..default()
         },
         ChatNodeBundle,
@@ -164,7 +169,13 @@ fn new_chat_message_event(
     chatbox_state: Res<ChatboxState>,
     user_query: Query<(Entity, &Name)>,
     mut chat_node_bundle: Query<(Entity, With<ChatNodeBundle>)>,
+    mut events: ResMut<Events<ApplyChatMessagesGradient>>,
 ) {
+    let mut incoming = chatbox_state.incoming.lock().expect("TODO");
+    if incoming.len() == 0 {
+        return;
+    }
+
     let node_bundle_id = match chat_node_bundle.get_single_mut() {
         Ok(id) => id.0,
         Err(QuerySingleError::NoEntities(_)) => {
@@ -177,7 +188,6 @@ fn new_chat_message_event(
         }
     };
 
-    let mut incoming = chatbox_state.incoming.lock().expect("TODO");
     let mut messages = chatbox_state.messages.lock().expect("TODO");
 
     for message in incoming.drain(..) {
@@ -203,16 +213,19 @@ fn new_chat_message_event(
         );
         messages.push(message);
     }
+
+    events.send(ApplyChatMessagesGradient);
 }
 
 fn update_node_bundle(message: &str, user: &str, node_bundle_ec: &mut EntityCommands) {
     let username_style = &TextStyle {
         font_size: 50.0,
-        color: Color::RED,
+        color: Color::RED.with_a(TRANSPARENCY_CHAT_FG_MAX),
         ..default()
     };
     let message_style = TextStyle {
         font_size: 42.0,
+        color: Color::WHITE.with_a(TRANSPARENCY_CHAT_FG_MAX),
         ..default()
     };
 
@@ -227,8 +240,61 @@ fn update_node_bundle(message: &str, user: &str, node_bundle_ec: &mut EntityComm
                 linebreak_behavior: BreakLineOn::WordBoundary,
             },
             transform: Transform::from_translation(Vec3::Z),
+            background_color: Color::rgba(0.0, 0.25, 0.75, TRANSPARENCY_CHAT_BG_MAX).into(),
             ..default()
         };
-        child_builder.spawn(text_bundle);
+        child_builder.spawn((text_bundle, MessageReceivedTime(Instant::now())));
     });
+}
+
+#[derive(Event)]
+struct ApplyChatMessagesGradient;
+
+const TRANSPARENCY_SETTLE_TIME: u64 = 15;
+const TRANSPARENCY_MIN: f32 = 0.25;
+const TRANSPARENCY_CHAT_BG_MAX: f32 = 0.6;
+const TRANSPARENCY_CHAT_FG_MAX: f32 = 0.9;
+
+fn apply_chat_messages_gradient(
+    chat_text_children: Query<(&Children, With<ChatNodeBundle>)>,
+    mut q_text: Query<(
+        &mut BackgroundColor,
+        &mut Text,
+        &MessageReceivedTime,
+        With<Parent>,
+    )>,
+    mut events: ResMut<Events<ApplyChatMessagesGradient>>,
+) {
+    let mut continue_applying_gradients = false;
+    let _ = events.drain();
+
+    let settle_time = Duration::from_secs(TRANSPARENCY_SETTLE_TIME);
+    for (children, _) in chat_text_children.iter() {
+        for &child in children.iter() {
+            let (mut bg_color, mut text, message_received_time, _) = q_text
+                .get_mut(child)
+                .expect("this text should always exist!");
+            let since_received = message_received_time.0.elapsed();
+            if since_received < settle_time {
+                continue_applying_gradients = true;
+            } else {
+                continue;
+            }
+
+            let scale = since_received.as_secs_f32() / settle_time.as_secs_f32();
+            let bg_transparency =
+                TRANSPARENCY_CHAT_BG_MAX - (TRANSPARENCY_CHAT_BG_MAX - TRANSPARENCY_MIN) * scale;
+            let fg_transparency =
+                TRANSPARENCY_CHAT_FG_MAX - (TRANSPARENCY_CHAT_FG_MAX - TRANSPARENCY_MIN) * scale;
+
+            bg_color.0.set_a(bg_transparency);
+            for section in &mut text.sections {
+                section.style.color.set_a(fg_transparency);
+            }
+        }
+    }
+
+    if continue_applying_gradients {
+        events.send(ApplyChatMessagesGradient);
+    }
 }
