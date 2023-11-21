@@ -1,5 +1,5 @@
 [package]
-name = "twitchy-mcbotface"
+name = "twiymcbof"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,7 @@ name = "tmbf"
 path = "src/lib.rs"
 
 [[bin]]
-name = "twitchy-mcbotface"
+name = "twiymcbof"
 path = "src/main.rs"
 
 # Enable a small amount of optimization in debug mode
