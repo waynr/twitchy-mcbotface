@@ -11,10 +11,10 @@ watchexec target:
     -c \
     -e toml,rs \
     -w justfile \
-    -w ../twiymcof-core/src \
-    -w ../twiymcof-core/Cargo.toml \
-    -w ../twiymcof-cmdr/src \
-    -w ../twiymcof-cmdr/Cargo.toml \
+    -w ../twiymcbof-router/src \
+    -w ../twiymcbof-router/Cargo.toml \
+    -w ../twiymcbof-cmdr/src \
+    -w ../twiymcbof-cmdr/Cargo.toml \
     --restart \
     just {{target}}
 
