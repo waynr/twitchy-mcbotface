@@ -21,7 +21,4 @@ pub enum Error {
 
     #[error("failed to receive message")]
     AsyncMessageReceiveError(#[from] tokio::sync::oneshot::error::RecvError),
-
-    #[error("failed to decode image data")]
-    ImageDecodeError(#[from] image::ImageError),
 }

@@ -1,0 +1,29 @@
+[package]
+name = "twiymcbof-router"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "twiymcbof_router"
+path = "src/lib.rs"
+
+[[bin]]
+name = "router"
+path = "src/main.rs"
+
+[dependencies]
+
+thiserror = "~1.0"
+
+twitch-irc = { version = "~4.0", features = [ "with-serde" ] }
+tokio = { version = "~1.17", features = [
+  "rt-multi-thread",
+  "rt",
+] }
+futures = "~0.3"
+tonic = "0.10"
+
+# config serialization/deserialization
+serde_yaml = "0.8"
+
+unicode-segmentation = "~1.9"
