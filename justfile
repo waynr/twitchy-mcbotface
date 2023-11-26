@@ -9,13 +9,15 @@ build-refactor:
 watchexec target:
   watchexec \
     -c \
-    -e toml,rs \
+    -e toml,rs,proto \
     -w justfile \
     -w Cargo.toml \
-    -w crates/twiymcbof-router/src \
-    -w crates/twiymcbof-router/Cargo.toml \
-    -w crates/twiymcbof-cmdr/src \
-    -w crates/twiymcbof-cmdr/Cargo.toml \
+    -w crates/router/src \
+    -w crates/router/Cargo.toml \
+    -w crates/router/proto \
+    -w crates/router/build.rs \
+    -w crates/cmdr/src \
+    -w crates/cmdr/Cargo.toml \
     --restart \
     just {{target}}
 
