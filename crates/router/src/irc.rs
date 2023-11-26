@@ -1,13 +1,15 @@
 use twitch_irc::login::StaticLoginCredentials;
-use twitch_irc::message::ServerMessage;
 use twitch_irc::TwitchIRCClient;
 use twitch_irc::{ClientConfig, SecureTCPTransport};
+
+pub use twitch_irc::message::ServerMessage;
 
 use futures::future::join_all;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::error::Result;
 
+#[derive(Debug)]
 pub struct MessageDispatcher {
     // note: this should be an MPSC sender
     pub sender: broadcast::Sender<ComponentMessage>,

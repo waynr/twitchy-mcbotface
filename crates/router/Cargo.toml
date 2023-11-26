@@ -1,10 +1,10 @@
 [package]
-name = "twiymcbof-router"
+name = "router"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "twiymcbof_router"
+name = "router"
 path = "src/lib.rs"
 
 [[bin]]
@@ -20,10 +20,18 @@ tokio = { version = "~1.17", features = [
   "rt-multi-thread",
   "rt",
 ] }
+tokio-stream = "0.1"
 futures = "~0.3"
+tracing = "0.1"
+
 tonic = "0.10"
+prost = "0.12"
+prost-types = "0.12"
 
 # config serialization/deserialization
 serde_yaml = "0.8"
 
 unicode-segmentation = "~1.9"
+
+[build-dependencies]
+tonic-build = { version = "0.10", features = ["prost"] }

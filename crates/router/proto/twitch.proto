@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package grpc.twiymcbof.twitch;
+
+service Twitch {
+  rpc StreamIrcMessages(StreamIrcRequest) returns (stream IrcMessage) {}
+}
+
+message StreamIrcRequest {};
+
+message IrcMessage {
+  string user = 1;
+  string message = 2;
+};

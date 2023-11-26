@@ -21,4 +21,10 @@ pub enum Error {
 
     #[error("failed to receive message")]
     AsyncMessageReceiveError(#[from] tokio::sync::oneshot::error::RecvError),
+
+    #[error("irc message unsupported by router: {0}")]
+    IrcMessageUnsupportedByRouter(String),
+
+    #[error("failed to serve grpc service: {0}")]
+    TonicTransportError(#[from] tonic::transport::Error),
 }

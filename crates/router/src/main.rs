@@ -1,14 +1,15 @@
 use std::fs::File;
 use std::io::Read;
 
-use futures::future::join3;
+use futures::future::join4;
 
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::ClientConfig;
 
-use twiymcbof_router::commander::{CommanderComposer, HardCodedCommander};
-use twiymcbof_router::error::Result;
-use twiymcbof_router::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
+use router::commander::{CommanderComposer, HardCodedCommander};
+use router::error::Result;
+use router::irc::{ComponentMessage, IrcCore, JoinChannelMessage};
+use router::router::TwitchRouter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,6 +22,15 @@ async fn main() -> Result<()> {
     let config = ClientConfig::new_simple(login_creds);
     let mut core = IrcCore::new();
     let join_dispatcher = core.get_msg_dispatcher();
+
+    let router_dispatcher = core.get_msg_dispatcher();
+    let router = TwitchRouter::new(router_dispatcher);
+    let router_handler = tokio::spawn(async move {
+        match router.run().await {
+          Ok(_) => (),
+          Err(e) => eprintln!("twitch router failed: {e}"),
+        };
+    });
 
     let run_irc_handle = core.run_irc(config);
 
@@ -43,8 +53,8 @@ async fn main() -> Result<()> {
         }
     });
 
-    let (_, run_irc_result, joiner_result) =
-        join3(cmdr_handle, run_irc_handle, joiner_handler).await;
+    let (_, run_irc_result, joiner_result, router_result) =
+        join4(cmdr_handle, run_irc_handle, joiner_handler, router_handler).await;
     match joiner_result {
         Err(e) => {
             println!("joiner failed: {}", e)
@@ -54,6 +64,12 @@ async fn main() -> Result<()> {
     match run_irc_result {
         Err(e) => {
             println!("run_irc failed: {}", e)
+        }
+        _ => (),
+    };
+    match router_result {
+        Err(e) => {
+            println!("router failed: {}", e)
         }
         _ => (),
     };
