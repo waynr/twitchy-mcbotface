@@ -15,7 +15,13 @@ pub enum Error {
     #[error("failed to join tokio task")]
     TokioJoinError(#[from] tokio::task::JoinError),
     #[error("failed to send twitch irc message")]
-    TwitchIRCMessageSendError(#[from] twitch_irc::Error<twitch_irc::SecureTCPTransport, twitch_irc::login::StaticLoginCredentials>),
+    TwitchIRCMessageSendError(
+        #[from]
+        twitch_irc::Error<
+            twitch_irc::SecureTCPTransport,
+            twitch_irc::login::StaticLoginCredentials,
+        >,
+    ),
     #[error("something bad: {0}")]
     SomethingBad(String),
 
