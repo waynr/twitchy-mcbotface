@@ -31,10 +31,6 @@ struct Message(String);
 #[derive(Component)]
 struct MessageReceivedTime(Instant);
 
-pub enum BotfaceEvent {
-    Nonce,
-}
-
 pub struct Botface {
     chatbox_state: ChatboxState,
     app: App,

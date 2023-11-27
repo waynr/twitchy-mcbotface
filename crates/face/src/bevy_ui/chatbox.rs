@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use bevy::prelude::*;
-use twitch_irc::message::PrivmsgMessage;
-use twitch_irc::message::ServerMessage;
+use tokio_stream::StreamExt;
+use tonic::Streaming;
 
-use crate::irc::MessageDispatcher;
+use super::super::error::{Error, Result};
+use super::super::IrcMessage;
 
 #[derive(Default)]
 pub(crate) struct ChatMessage {
@@ -14,11 +15,11 @@ pub(crate) struct ChatMessage {
     pub(crate) message: String,
 }
 
-impl From<PrivmsgMessage> for ChatMessage {
-    fn from(msg: PrivmsgMessage) -> Self {
+impl From<IrcMessage> for ChatMessage {
+    fn from(msg: IrcMessage) -> Self {
         Self {
-            user: msg.sender.name,
-            message: msg.message_text,
+            user: msg.user,
+            message: msg.message,
         }
     }
 }
@@ -36,28 +37,39 @@ impl fmt::Display for ChatMessage {
 }
 
 pub struct ChatboxDispatcher {
-    message_dispatcher: MessageDispatcher,
     state: ChatboxState,
 }
 
 impl ChatboxDispatcher {
-    pub fn new(message_dispatcher: MessageDispatcher, state: ChatboxState) -> Self {
-        Self {
-            message_dispatcher,
-            state,
-        }
+    pub fn new(state: ChatboxState) -> Self {
+        Self { state }
     }
 
-    pub async fn run(&mut self) {
-        while let Ok(message) = self.message_dispatcher.receiver.recv().await {
-            match message {
-                ServerMessage::Privmsg(msg) => match self.state.incoming.lock() {
-                    Ok(mut incoming) => {
-                        incoming.push(msg.into());
-                    }
-                    Err(e) => eprintln!("{:?}", e),
-                },
-                _ => (),
+    pub async fn run(&mut self, mut irc_message_stream: Streaming<IrcMessage>) -> Result<()> {
+        tracing::info!("running ChatboxDispatcher loop");
+        loop {
+            match irc_message_stream.next().await {
+                Some(Ok(msg)) => {
+                    let mut g = match self.state.incoming.lock() {
+                        Ok(g) => g,
+                        Err(e) => {
+                            tracing::warn!("mutex poison error: {:?}", e);
+                            tracing::warn!("recovering from poison error");
+                            e.into_inner()
+                        }
+                    };
+                    g.push(msg.into());
+                }
+                Some(Err(status)) => {
+                    tracing::warn!(
+                        "irc message stream return error: {}",
+                        status.code().description()
+                    );
+                }
+                None => {
+                    tracing::warn!("gRPC stream disconnected!");
+                    return Err(Error::DisconnectedFromTwitchRouterGRPCServer);
+                }
             }
         }
     }
