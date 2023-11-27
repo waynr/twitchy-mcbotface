@@ -1,3 +1,5 @@
+CARGO_TARGET_DIR := "$(pwd)/target"
+
 build:
   cargo build
 
@@ -16,8 +18,8 @@ watchexec target:
     -w ../router/Cargo.toml \
     -w ../router/src \
     -w ../router/Cargo.toml \
-    -w ../cmdr/src \
-    -w ../cmdr/Cargo.toml \
+    -w ../face/src \
+    -w ../face/Cargo.toml \
     --restart \
     just {{target}}
 

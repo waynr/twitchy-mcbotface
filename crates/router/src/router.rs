@@ -11,10 +11,8 @@ use tonic::{Request, Response, Status};
 use super::error::{Error, Result};
 use super::irc::{MessageDispatcher, ServerMessage};
 
-pub mod pb {
-    tonic::include_proto!("grpc.twiymcbof.twitch");
-}
-use pb::{IrcMessage, StreamIrcRequest};
+use super::pb::{IrcMessage, StreamIrcRequest};
+use super::pb::twitch_server::{Twitch, TwitchServer};
 
 #[derive(Debug)]
 pub struct TwitchRouter {
@@ -30,7 +28,7 @@ impl TwitchRouter {
 
     pub async fn run(self) -> Result<()> {
         Server::builder()
-            .add_service(pb::twitch_server::TwitchServer::new(self))
+            .add_service(TwitchServer::new(self))
             .serve("localhost:50551".to_socket_addrs()?.next().unwrap())
             .await?;
 
@@ -42,7 +40,7 @@ type IrcResult<T> = std::result::Result<Response<T>, Status>;
 type ResponseStream = Pin<Box<dyn Stream<Item = std::result::Result<IrcMessage, Status>> + Send>>;
 
 #[tonic::async_trait]
-impl pb::twitch_server::Twitch for TwitchRouter {
+impl Twitch for TwitchRouter {
     type StreamIrcMessagesStream = ResponseStream;
 
     async fn stream_irc_messages(

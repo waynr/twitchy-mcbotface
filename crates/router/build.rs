@@ -1,3 +1,11 @@
+use std::path::PathBuf;
+
 fn main() {
-    tonic_build::compile_protos("proto/twitch.proto").unwrap();
+    let imports: &[&str] = &[];
+
+    tonic_build::configure()
+        .build_server(true)
+        .out_dir(&PathBuf::from("./src/pb/"))
+        .compile(&["proto/twitch.proto"], &imports)
+        .unwrap();
 }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package grpc.twiymcbof.twitch;
+package twitch;
 
 service Twitch {
   rpc StreamIrcMessages(StreamIrcRequest) returns (stream IrcMessage) {}
